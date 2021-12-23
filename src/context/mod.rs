@@ -166,7 +166,7 @@ where
             .ok_or_else(|| anyhow::anyhow!("The dependency manager is unset"))
             .and_then(|manager| {
                 let address = manager.resolve_library(path)?;
-                Ok(self.field_const_str(&address["0x".len()..]))
+                Ok(self.field_const_str(address.as_str()))
             })
     }
 
