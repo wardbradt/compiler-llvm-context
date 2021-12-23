@@ -1,0 +1,20 @@
+[package]
+name = "compiler-llvm-context"
+version = "1.0.0"
+authors = [
+    "Alex Zarudnyy <a.zarudnyy@matterlabs.dev>",
+]
+license = "Apache-2.0"
+edition = "2021"
+description = "The zkEVM Solidity compiler"
+
+[dependencies]
+anyhow = "1.0"
+
+compiler-common = { git = "ssh://git@github.com/matter-labs/compiler-common" }
+
+[dependencies.inkwell]
+git = "ssh://git@github.com/matter-labs-forks/inkwell"
+branch = "master"
+default-features = false
+features = ["llvm13-0", "target-syncvm"]
