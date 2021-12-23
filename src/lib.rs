@@ -8,7 +8,7 @@ pub(crate) mod dump_flag;
 pub use self::context::address_space::AddressSpace;
 pub use self::context::argument::Argument;
 pub use self::context::function::intrinsic::Intrinsic as IntrinsicFunction;
-pub use self::context::function::r#return as FunctionReturn;
+pub use self::context::function::r#return::Return as FunctionReturn;
 pub use self::context::function::runtime::Runtime;
 pub use self::context::function::Function;
 pub use self::context::optimizer::Optimizer;
@@ -37,65 +37,17 @@ pub trait Dependency {
     ///
     /// Compiles a project dependency.
     ///
-    fn compile(&mut self, name: &str);
+    fn compile(
+        &mut self,
+        name: &str,
+        parent_name: &str,
+        optimization_level_middle: inkwell::OptimizationLevel,
+        optimization_level_back: inkwell::OptimizationLevel,
+        dump_flags: Vec<DumpFlag>,
+    ) -> anyhow::Result<String>;
+
+    ///
+    /// Resolves a library address.
+    ///
+    fn resolve_library(&self, path: &str) -> anyhow::Result<String>;
 }
-
-// ///
-// /// Compiles the dependency object.
-// ///
-// pub fn compile_dependency(&mut self, module_name: &str) -> Option<String> {
-//     let contract_path = self
-//         .project
-//         .contracts
-//         .iter()
-//         .find_map(|(path, contract)| {
-//             if contract.object.identifier.as_str() == module_name {
-//                 Some(path.to_owned())
-//             } else {
-//                 None
-//             }
-//         })
-//         .unwrap_or_else(|| panic!("Dependency `{}` not found", module_name));
-//
-//     let hash = self
-//         .project
-//         .compile(
-//             contract_path.as_str(),
-//             self.optimizer.level(),
-//             self.dump_flags.as_slice(),
-//         )
-//         .unwrap_or_else(|error| {
-//             panic!("Dependency `{}` compiling error: {:?}", module_name, error)
-//         });
-//
-//     self.project
-//         .contracts
-//         .iter_mut()
-//         .find_map(|(_path, contract)| {
-//             if contract.object.identifier == self.module().get_name() {
-//                 Some(contract)
-//             } else {
-//                 None
-//             }
-//         })
-//         .as_mut()?
-//         .insert_factory_dependency(hash.clone(), contract_path);
-//
-//     Some(hash)
-// }
-
-// ///
-// /// Gets a deployed library address.
-// ///
-// pub fn get_library_address(&self, path: &str) -> Option<inkwell::values::IntValue<'ctx>> {
-//     for (file_path, contracts) in self.project.libraries.iter() {
-//         for (contract_name, address) in contracts.iter() {
-//             let key = format!("{}:{}", file_path, contract_name);
-//             if key.as_str() == path {
-//                 return Some(self.field_const_str(&address["0x".len()..]));
-//             }
-//         }
-//     }
-//
-//     None
-// }

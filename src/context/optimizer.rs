@@ -7,8 +7,10 @@
 ///
 #[derive(Debug)]
 pub struct Optimizer<'ctx> {
-    /// The optimization level.
-    level: inkwell::OptimizationLevel,
+    /// The middle-end optimization level.
+    level_middle: inkwell::OptimizationLevel,
+    /// The back-end optimization level.
+    level_back: inkwell::OptimizationLevel,
     /// The module optimization pass manager.
     pass_manager_module: inkwell::passes::PassManager<inkwell::module::Module<'ctx>>,
     /// The function optimization pass manager.
@@ -21,15 +23,16 @@ impl<'ctx> Optimizer<'ctx> {
     ///
     pub fn new(
         module: &inkwell::module::Module<'ctx>,
-        optimization_level: inkwell::OptimizationLevel,
+        level_middle: inkwell::OptimizationLevel,
+        level_back: inkwell::OptimizationLevel,
     ) -> Self {
-        let internalize = matches!(optimization_level, inkwell::OptimizationLevel::Aggressive);
-        let run_inliner = matches!(optimization_level, inkwell::OptimizationLevel::Aggressive);
+        let internalize = matches!(level_middle, inkwell::OptimizationLevel::Aggressive);
+        let run_inliner = matches!(level_middle, inkwell::OptimizationLevel::Aggressive);
 
         let pass_manager_builder = inkwell::passes::PassManagerBuilder::create();
-        pass_manager_builder.set_optimization_level(optimization_level);
+        pass_manager_builder.set_optimization_level(level_middle);
         pass_manager_builder.set_disable_unroll_loops(matches!(
-            optimization_level,
+            level_middle,
             inkwell::OptimizationLevel::Aggressive
         ));
 
@@ -45,17 +48,25 @@ impl<'ctx> Optimizer<'ctx> {
         pass_manager_builder.populate_function_pass_manager(&pass_manager_function);
 
         Self {
-            level: optimization_level,
+            level_middle,
+            level_back,
             pass_manager_module,
             pass_manager_function,
         }
     }
 
     ///
-    /// Returns the optimization level.
+    /// Returns the middle-end optimization level.
     ///
-    pub fn level(&self) -> inkwell::OptimizationLevel {
-        self.level
+    pub fn level_middle(&self) -> inkwell::OptimizationLevel {
+        self.level_middle
+    }
+
+    ///
+    /// Returns the back-end optimization level.
+    ///
+    pub fn level_back(&self) -> inkwell::OptimizationLevel {
+        self.level_back
     }
 
     ///

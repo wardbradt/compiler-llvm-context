@@ -70,7 +70,8 @@ where
     pub fn new(
         llvm: &'ctx inkwell::context::Context,
         machine: &inkwell::targets::TargetMachine,
-        optimization_level: inkwell::OptimizationLevel,
+        optimization_level_middle: inkwell::OptimizationLevel,
+        optimization_level_back: inkwell::OptimizationLevel,
         module_name: &str,
         dependency_manager: Option<&'dep mut D>,
         dump_flags: Vec<DumpFlag>,
@@ -79,7 +80,7 @@ where
         module.set_triple(&machine.get_triple());
         module.set_data_layout(&machine.get_target_data().get_data_layout());
 
-        let optimizer = Optimizer::new(&module, optimization_level);
+        let optimizer = Optimizer::new(&module, optimization_level_middle, optimization_level_back);
 
         let runtime = Runtime::new(llvm, &module);
 
@@ -136,6 +137,37 @@ where
         self.module()
             .verify()
             .map_err(|error| anyhow::anyhow!(error.to_string()))
+    }
+
+    ///
+    /// Compiles a contract dependency, if the dependency manager is set.
+    ///
+    pub fn compile_dependency(&mut self, name: &str) -> anyhow::Result<String> {
+        self.dependency_manager
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("The dependency manager is unset"))
+            .and_then(|manager| {
+                manager.compile(
+                    name,
+                    self.module.get_name().to_str().expect("Always valid"),
+                    self.optimizer.level_middle(),
+                    self.optimizer.level_back(),
+                    self.dump_flags.clone(),
+                )
+            })
+    }
+
+    ///
+    /// Gets a deployed library address.
+    ///
+    pub fn resolve_library(&self, path: &str) -> anyhow::Result<inkwell::values::IntValue<'ctx>> {
+        self.dependency_manager
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("The dependency manager is unset"))
+            .and_then(|manager| {
+                let address = manager.resolve_library(path)?;
+                Ok(self.field_const_str(&address["0x".len()..]))
+            })
     }
 
     ///
