@@ -820,7 +820,7 @@ where
     }
 
     ///
-    /// Returns the memory pointer to `address_space at the `offset` bytes.
+    /// Returns the memory pointer to `address_space` at `offset` bytes.
     ///
     pub fn access_memory(
         &self,
@@ -833,5 +833,23 @@ where
             self.field_type().ptr_type(address_space.into()),
             name,
         )
+    }
+
+    ///
+    /// Returns a contract context value.
+    ///
+    pub fn access_context(
+        &self,
+        context_value: compiler_common::ContextValue,
+    ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
+        let intrinsic = self.get_intrinsic_function(IntrinsicFunction::GetFromContext);
+        let value = self
+            .build_call(
+                intrinsic,
+                &[self.field_const(context_value.into()).as_basic_value_enum()],
+                "context_get_call",
+            )
+            .expect("Contract context always returns a value");
+        Ok(value)
     }
 }
