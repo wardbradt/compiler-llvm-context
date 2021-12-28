@@ -100,7 +100,6 @@ where
             compiler_common::LLVM_FUNCTION_ENTRY,
             function_type,
             Some(inkwell::module::Linkage::External),
-            true,
         );
 
         Ok(())

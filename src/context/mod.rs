@@ -178,7 +178,6 @@ where
         name: &str,
         r#type: inkwell::types::FunctionType<'ctx>,
         linkage: Option<inkwell::module::Linkage>,
-        set_current: bool,
     ) {
         let value = self.module().add_function(name, r#type, linkage);
         for index in 0..value.count_params() {
@@ -208,10 +207,6 @@ where
             None,
         );
         self.functions.insert(name.to_string(), function.clone());
-
-        if set_current {
-            self.function = Some(function);
-        }
     }
 
     ///

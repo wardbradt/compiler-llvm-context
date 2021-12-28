@@ -50,7 +50,6 @@ where
             compiler_common::LLVM_FUNCTION_SELECTOR,
             function_type,
             Some(inkwell::module::Linkage::Private),
-            true,
         );
 
         Ok(())
