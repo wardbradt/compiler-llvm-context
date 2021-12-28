@@ -7,9 +7,12 @@ pub(crate) mod dump_flag;
 
 pub use self::context::address_space::AddressSpace;
 pub use self::context::argument::Argument;
+pub use self::context::function::constructor::Constructor as ConstructorFunction;
+pub use self::context::function::entry::Entry as EntryFunction;
 pub use self::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 pub use self::context::function::r#return::Return as FunctionReturn;
 pub use self::context::function::runtime::Runtime;
+pub use self::context::function::selector::Selector as SelectorFunction;
 pub use self::context::function::Function;
 pub use self::context::optimizer::Optimizer;
 pub use self::context::r#loop::Loop;
@@ -24,6 +27,21 @@ pub trait WriteLLVM<D>
 where
     D: Dependency,
 {
+    ///
+    /// Makes the required preparations in the LLVM IR.
+    ///
+    fn prepare(_context: &mut Context<D>) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    ///
+    /// Declares the entity in the LLVM IR.
+    /// Is usually performed in order to use the item before defining it.
+    ///
+    fn declare(&mut self, _context: &mut Context<D>) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     ///
     /// Translates the entity into LLVM IR.
     ///

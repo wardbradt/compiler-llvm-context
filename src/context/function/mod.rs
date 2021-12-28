@@ -2,9 +2,12 @@
 //! The LLVM generator function.
 //!
 
+pub mod constructor;
+pub mod entry;
 pub mod intrinsic;
 pub mod r#return;
 pub mod runtime;
+pub mod selector;
 
 use std::collections::HashMap;
 

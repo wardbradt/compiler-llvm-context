@@ -208,6 +208,7 @@ where
             None,
         );
         self.functions.insert(name.to_string(), function.clone());
+
         if set_current {
             self.function = Some(function);
         }
