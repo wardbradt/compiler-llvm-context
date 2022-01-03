@@ -4,6 +4,7 @@
 
 pub(crate) mod context;
 pub(crate) mod dump_flag;
+pub(crate) mod utils;
 
 pub use self::context::address_space::AddressSpace;
 pub use self::context::argument::Argument;
@@ -18,6 +19,19 @@ pub use self::context::optimizer::Optimizer;
 pub use self::context::r#loop::Loop;
 pub use self::context::Context;
 pub use self::dump_flag::DumpFlag;
+pub use self::utils::arithmetic;
+pub use self::utils::bitwise;
+pub use self::utils::calldata;
+pub use self::utils::comparison;
+pub use self::utils::context as contract_context;
+pub use self::utils::contract;
+pub use self::utils::create;
+pub use self::utils::hash;
+pub use self::utils::math;
+pub use self::utils::memory;
+pub use self::utils::r#return;
+pub use self::utils::return_data;
+pub use self::utils::storage;
 
 ///
 /// Implemented by items which are translated into LLVM IR.
