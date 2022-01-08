@@ -751,18 +751,28 @@ where
     /// Returns a field type constant from a decimal or hexadecimal string.
     ///
     pub fn field_const_str(&self, value: &str) -> inkwell::values::IntValue<'ctx> {
-        let (value, base) = match value.strip_prefix("0x") {
-            Some(hexadecimal) => (hexadecimal, inkwell::types::StringRadix::Hexadecimal),
-            None => (value, inkwell::types::StringRadix::Decimal),
-        };
+        match value.strip_prefix("0x") {
+            Some(hexadecimal) => self.field_const_str_hex(hexadecimal),
+            None => self.field_const_str_hex(value),
+        }
+    }
 
+    ///
+    /// Returns a field type constant from a hexadecimal string.
+    ///
+    pub fn field_const_str_dec(&self, value: &str) -> inkwell::values::IntValue<'ctx> {
         self.field_type()
-            .const_int_from_string(value, base)
-            .unwrap_or_else(|| {
-                self.field_type()
-                    .const_int_from_string(value, inkwell::types::StringRadix::Hexadecimal)
-                    .unwrap_or_else(|| panic!("Invalid string constant `{}`", value))
-            })
+            .const_int_from_string(value, inkwell::types::StringRadix::Decimal)
+            .unwrap_or_else(|| panic!("Invalid string constant `{}`", value))
+    }
+
+    ///
+    /// Returns a field type constant from a hexadecimal string.
+    ///
+    pub fn field_const_str_hex(&self, value: &str) -> inkwell::values::IntValue<'ctx> {
+        self.field_type()
+            .const_int_from_string(value, inkwell::types::StringRadix::Hexadecimal)
+            .unwrap_or_else(|| panic!("Invalid string constant `{}`", value))
     }
 
     ///
