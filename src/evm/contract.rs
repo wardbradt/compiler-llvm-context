@@ -28,7 +28,7 @@ where
     D: Dependency,
 {
     if let Some(value) = value {
-        crate::utils::check_value_zero(context, value);
+        crate::evm::check_value_zero(context, value);
     }
 
     let intrinsic = context.get_intrinsic_function(IntrinsicFunction::SwitchContext);

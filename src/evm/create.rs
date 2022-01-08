@@ -38,7 +38,7 @@ pub fn create2<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    crate::utils::check_value_zero(context, value);
+    crate::evm::check_value_zero(context, value);
 
     let hash_pointer =
         context.access_memory(input_offset, AddressSpace::Heap, "create_hash_pointer");

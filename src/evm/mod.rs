@@ -9,6 +9,7 @@ pub mod comparison;
 pub mod context;
 pub mod contract;
 pub mod create;
+pub mod event;
 pub mod hash;
 pub mod math;
 pub mod memory;
