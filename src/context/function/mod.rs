@@ -34,6 +34,10 @@ pub struct Function<'ctx> {
     pub r#return: Option<Return<'ctx>>,
     /// The stack representation.
     pub stack: HashMap<String, inkwell::values::PointerValue<'ctx>>,
+    /// The block-local variables. They are still allocated at the beginning of the function,
+    /// but their parent block must be known in order to pass the implicit arguments thereto.
+    /// Is only used by the Vyper LLL IR compiler.
+    pub label_arguments: HashMap<String, Vec<String>>,
 }
 
 impl<'ctx> Function<'ctx> {
@@ -61,6 +65,7 @@ impl<'ctx> Function<'ctx> {
             return_block,
             r#return,
             stack: HashMap::with_capacity(Self::STACK_HASHMAP_INITIAL_CAPACITY),
+            label_arguments: HashMap::new(),
         }
     }
 
