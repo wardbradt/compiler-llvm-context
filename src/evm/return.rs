@@ -50,10 +50,7 @@ where
         context.build_unconditional_branch(function.return_block);
     } else {
         let long_return_flag_pointer = context.access_memory(
-            context.field_const(
-                (compiler_common::SOLIDITY_MEMORY_OFFSET_EMPTY_SLOT * compiler_common::SIZE_FIELD)
-                    as u64,
-            ),
+            context.long_return_offset(),
             AddressSpace::Heap,
             "long_return_flag_pointer",
         );
