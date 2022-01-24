@@ -44,7 +44,7 @@ where
         context.field_const_str(compiler_common::ABI_ADDRESS_IDENTITY),
         "contract_call_is_address_identity",
     );
-    context.build_conditional_branch(is_address_identity, identity_block, join_block);
+    context.build_conditional_branch(is_address_identity, identity_block, ordinary_block);
 
     context.set_basic_block(identity_block);
     let result = call_identity(context, output_offset, input_offset, output_size)?;
