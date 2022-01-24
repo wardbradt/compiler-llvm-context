@@ -31,6 +31,82 @@ where
         crate::evm::check_value_zero(context, value);
     }
 
+    let identity_block = context.append_basic_block("contract_call_identity_block");
+    let ordinary_block = context.append_basic_block("contract_call_ordinary_block");
+    let join_block = context.append_basic_block("contract_call_join_block");
+
+    let result_pointer = context.build_alloca(context.field_type(), "contract_call_result_pointer");
+    context.build_store(result_pointer, context.field_const(0));
+
+    let is_address_identity = context.builder().build_int_compare(
+        inkwell::IntPredicate::EQ,
+        address,
+        context.field_const_str(compiler_common::ABI_ADDRESS_IDENTITY),
+        "contract_call_is_address_identity",
+    );
+    context.build_conditional_branch(is_address_identity, identity_block, join_block);
+
+    context.set_basic_block(identity_block);
+    let result = call_identity(context, output_offset, input_offset, output_size)?;
+    context.build_store(result_pointer, result);
+    context.build_unconditional_branch(join_block);
+
+    context.set_basic_block(ordinary_block);
+    let result = call_ordinary(
+        context,
+        call_type,
+        address,
+        input_offset,
+        input_size,
+        output_offset,
+        output_size,
+    )?;
+    context.build_store(result_pointer, result);
+    context.build_unconditional_branch(join_block);
+
+    context.set_basic_block(join_block);
+    let result = context.build_load(result_pointer, "contract_call_result");
+
+    Ok(Some(result))
+}
+
+///
+/// Translates a linker symbol.
+///
+pub fn linker_symbol<'ctx, 'dep, D>(
+    context: &mut Context<'ctx, 'dep, D>,
+    mut arguments: [Argument<'ctx>; 1],
+) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
+where
+    D: Dependency,
+{
+    let path = arguments[0]
+        .original
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("Linker symbol literal is missing"))?;
+
+    Ok(Some(
+        context
+            .resolve_library(path.as_str())?
+            .as_basic_value_enum(),
+    ))
+}
+
+///
+/// Generates an ordinary contract call
+///
+fn call_ordinary<'ctx, 'dep, D>(
+    context: &mut Context<'ctx, 'dep, D>,
+    call_type: IntrinsicFunction,
+    address: inkwell::values::IntValue<'ctx>,
+    input_offset: inkwell::values::IntValue<'ctx>,
+    input_size: inkwell::values::IntValue<'ctx>,
+    output_offset: inkwell::values::IntValue<'ctx>,
+    output_size: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
     let intrinsic = context.get_intrinsic_function(IntrinsicFunction::SwitchContext);
     context.build_call(intrinsic, &[], "contract_call_switch_context");
 
@@ -99,27 +175,35 @@ where
         "contract_call_memcpy_from_child",
     );
 
-    Ok(Some(is_call_successful))
+    Ok(is_call_successful)
 }
 
 ///
-/// Translates a linker symbol.
+/// Generates a memcopy call for the Identity precompile.
 ///
-pub fn linker_symbol<'ctx, 'dep, D>(
+fn call_identity<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
-    mut arguments: [Argument<'ctx>; 1],
-) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
+    destination: inkwell::values::IntValue<'ctx>,
+    source: inkwell::values::IntValue<'ctx>,
+    size: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
 {
-    let path = arguments[0]
-        .original
-        .take()
-        .ok_or_else(|| anyhow::anyhow!("Linker symbol literal is missing"))?;
+    let destination = context.access_memory(
+        destination,
+        AddressSpace::Heap,
+        "contract_call_identity_destination",
+    );
+    let source = context.access_memory(source, AddressSpace::Heap, "contract_call_identity_source");
 
-    Ok(Some(
-        context
-            .resolve_library(path.as_str())?
-            .as_basic_value_enum(),
-    ))
+    context.build_memcpy(
+        IntrinsicFunction::MemoryCopy,
+        destination,
+        source,
+        size,
+        "contract_call_memcpy_to_child",
+    );
+
+    Ok(context.field_const(1).as_basic_value_enum())
 }
