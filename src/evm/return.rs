@@ -4,6 +4,7 @@
 
 use crate::context::address_space::AddressSpace;
 use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
+use crate::context::function::Function;
 use crate::context::Context;
 use crate::Dependency;
 
@@ -43,20 +44,7 @@ where
         size,
         "return_memcpy_to_parent",
     );
-
-    if context.function().name == compiler_common::LLVM_FUNCTION_SELECTOR
-        || context.function().name == compiler_common::LLVM_FUNCTION_CONSTRUCTOR
-    {
-        context.build_unconditional_branch(function.return_block);
-    } else {
-        let long_return_flag_pointer = context.access_memory(
-            context.long_return_offset(),
-            AddressSpace::Heap,
-            "long_return_flag_pointer",
-        );
-        context.build_store(long_return_flag_pointer, context.field_const(1));
-        context.build_unconditional_branch(function.throw_block);
-    }
+    long_return(context, function)?;
 
     Ok(None)
 }
@@ -114,8 +102,8 @@ where
     let function = context.function().to_owned();
 
     context.write_header(context.field_const(0), AddressSpace::Parent);
+    long_return(context, function)?;
 
-    context.build_unconditional_branch(function.return_block);
     Ok(None)
 }
 
@@ -134,4 +122,31 @@ where
 
     context.build_unconditional_branch(function.throw_block);
     Ok(None)
+}
+
+///
+/// Generates the long return sequence.
+///
+fn long_return<'ctx, 'dep, D>(
+    context: &mut Context<'ctx, 'dep, D>,
+    function: Function<'ctx>,
+) -> anyhow::Result<()>
+where
+    D: Dependency,
+{
+    if context.function().name == compiler_common::LLVM_FUNCTION_SELECTOR
+        || context.function().name == compiler_common::LLVM_FUNCTION_CONSTRUCTOR
+    {
+        context.build_unconditional_branch(function.return_block);
+    } else {
+        let long_return_flag_pointer = context.access_memory(
+            context.long_return_offset(),
+            AddressSpace::Heap,
+            "long_return_flag_pointer",
+        );
+        context.build_store(long_return_flag_pointer, context.field_const(1));
+        context.build_unconditional_branch(function.throw_block);
+    }
+
+    Ok(())
 }
