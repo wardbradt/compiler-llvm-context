@@ -24,18 +24,14 @@ where
     context.build_call(intrinsic, &[], "keccak256_switch_context");
 
     let child_pointer_header = context.access_memory(
-        context.field_const(
-            (compiler_common::ABI_MEMORY_OFFSET_HEADER * compiler_common::SIZE_FIELD) as u64,
-        ),
+        context.field_const(0 /* TODO */),
         AddressSpace::Child,
         "keccak256_child_pointer_header",
     );
     context.build_store(child_pointer_header, input_size);
 
     let child_pointer_data = context.access_memory(
-        context.field_const(
-            (compiler_common::ABI_MEMORY_OFFSET_DATA * compiler_common::SIZE_FIELD) as u64,
-        ),
+        context.field_const(0 /* TODO */),
         AddressSpace::Child,
         "keccak256_child_input_destination",
     );

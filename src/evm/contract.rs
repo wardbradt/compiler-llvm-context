@@ -111,18 +111,14 @@ where
     context.build_call(intrinsic, &[], "contract_call_switch_context");
 
     let child_pointer_header = context.access_memory(
-        context.field_const(
-            (compiler_common::ABI_MEMORY_OFFSET_HEADER * compiler_common::SIZE_FIELD) as u64,
-        ),
+        context.field_const(0 /* TODO */),
         AddressSpace::Child,
         "contract_call_child_pointer_header",
     );
     context.build_store(child_pointer_header, input_size);
 
     let destination = context.access_memory(
-        context.field_const(
-            (compiler_common::ABI_MEMORY_OFFSET_DATA * compiler_common::SIZE_FIELD) as u64,
-        ),
+        context.field_const(0 /* TODO */),
         AddressSpace::Child,
         "contract_call_child_input_destination",
     );
@@ -155,9 +151,7 @@ where
         .expect("IntrinsicFunction always returns a flag");
 
     let source = context.access_memory(
-        context.field_const(
-            (compiler_common::ABI_MEMORY_OFFSET_DATA * compiler_common::SIZE_FIELD) as u64,
-        ),
+        context.field_const(0 /* TODO */),
         AddressSpace::Child,
         "contract_call_output_source",
     );

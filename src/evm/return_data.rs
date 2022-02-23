@@ -18,14 +18,14 @@ pub fn size<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let header = context.read_header(AddressSpace::Child);
-    let value = context.builder().build_and(
-        header,
-        context.field_const(0x00000000ffffffff),
-        "calldata_size",
+    let length_pointer = context.access_memory(
+        context.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_LENGTH as u64),
+        AddressSpace::Heap,
+        "return_data_size_length_pointer",
     );
+    let length = context.build_load(length_pointer, "return_data_value");
 
-    Ok(Some(value.as_basic_value_enum()))
+    Ok(Some(length.as_basic_value_enum()))
 }
 
 ///
@@ -44,15 +44,20 @@ where
         "return_data_copy_destination_pointer",
     );
 
-    let source_offset_shift = compiler_common::ABI_MEMORY_OFFSET_DATA * compiler_common::SIZE_FIELD;
+    let parent_offset_pointer = context.access_memory(
+        context.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+        AddressSpace::Heap,
+        "return_data_copy_parent_offset_pointer",
+    );
+    let parent_offset = context.build_load(parent_offset_pointer, "return_data_copy_parent_offset");
     let source_offset = context.builder().build_int_add(
-        arguments[1].into_int_value(),
-        context.field_const(source_offset_shift as u64),
+        arguments[0].into_int_value(),
+        parent_offset.into_int_value(),
         "return_data_copy_source_offset",
     );
     let source = context.access_memory(
         source_offset,
-        AddressSpace::Child,
+        AddressSpace::Parent,
         "return_data_copy_source_pointer",
     );
 

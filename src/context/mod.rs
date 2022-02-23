@@ -693,45 +693,66 @@ where
     }
 
     ///
-    /// Reads the data size from the specified memory.
+    /// Reads the ABI data from the specified heap area.
     ///
-    pub fn read_header(&self, address_space: AddressSpace) -> inkwell::values::IntValue<'ctx> {
-        let header_pointer = self.access_memory(
-            self.field_const(
-                (compiler_common::ABI_MEMORY_OFFSET_HEADER * compiler_common::SIZE_FIELD) as u64,
-            ),
-            address_space,
-            "header_pointer",
+    pub fn read_abi_data(&self) -> inkwell::values::IntValue<'ctx> {
+        let data_offset_pointer = self.access_memory(
+            self.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+            AddressSpace::Heap,
+            "data_offset_pointer",
         );
-        self.build_load(header_pointer, "header_value")
-            .into_int_value()
+        let data_offset = self
+            .build_load(data_offset_pointer, "data_offset")
+            .into_int_value();
+
+        let data_length_pointer = self.access_memory(
+            self.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+            AddressSpace::Heap,
+            "data_length_pointer",
+        );
+        let data_length = self
+            .build_load(data_length_pointer, "data_length")
+            .into_int_value();
+        let data_length_shifted = self.builder.build_left_shift(
+            data_length,
+            self.field_const(compiler_common::BITLENGTH_X32 as u64),
+            "data_length_shifted",
+        );
+
+        self.builder
+            .build_int_add(data_offset, data_length_shifted, "data_merged")
     }
 
     ///
-    /// Writes the data size to the specified memory.
+    /// Writes the ABI data to the specified heap area.
     ///
-    pub fn write_header(
+    pub fn write_abi_data(
         &self,
-        header: inkwell::values::IntValue<'ctx>,
-        address_space: AddressSpace,
+        data_offset: inkwell::values::IntValue<'ctx>,
+        data_length: inkwell::values::IntValue<'ctx>,
     ) {
-        let header_pointer = self.access_memory(
-            self.field_const(
-                (compiler_common::ABI_MEMORY_OFFSET_HEADER * compiler_common::SIZE_FIELD) as u64,
-            ),
-            address_space,
-            "header_pointer",
+        let data_offset_pointer = self.access_memory(
+            self.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+            AddressSpace::Heap,
+            "data_offset_pointer",
         );
-        self.build_store(header_pointer, header);
+        self.build_store(data_offset_pointer, data_offset);
+
+        let data_length_pointer = self.access_memory(
+            self.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_LENGTH as u64),
+            AddressSpace::Heap,
+            "data_length_pointer",
+        );
+        self.build_store(data_length_pointer, data_length);
     }
 
     ///
     /// Writes the error data to the parent memory.
     ///
     pub fn write_error(&self, message: &'static str) {
-        self.write_header(
+        self.write_abi_data(
+            self.field_const(0),
             self.field_const(compiler_common::SIZE_X32 as u64),
-            AddressSpace::Parent,
         );
 
         let error_hash = compiler_common::keccak256(message.as_bytes());
@@ -746,9 +767,7 @@ where
             "error_code_shifted",
         );
         let parent_error_code_pointer = self.access_memory(
-            self.field_const(
-                (compiler_common::ABI_MEMORY_OFFSET_DATA * compiler_common::SIZE_FIELD) as u64,
-            ),
+            self.field_const(0),
             AddressSpace::Parent,
             "parent_error_code_pointer",
         );

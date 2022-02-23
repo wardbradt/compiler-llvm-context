@@ -3,7 +3,6 @@
 //!
 
 use crate::context::address_space::AddressSpace;
-use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::function::Function;
 use crate::context::Context;
 use crate::Dependency;
@@ -20,30 +19,10 @@ where
 {
     let function = context.function().to_owned();
 
-    let source = context.access_memory(
-        arguments[0].into_int_value(),
-        AddressSpace::Heap,
-        "return_source_pointer",
-    );
-
-    let destination = context.access_memory(
-        context.field_const(
-            (compiler_common::ABI_MEMORY_OFFSET_DATA * compiler_common::SIZE_FIELD) as u64,
-        ),
-        AddressSpace::Parent,
-        "return_destination_pointer",
-    );
-
+    let offset = arguments[0].into_int_value();
     let size = arguments[1].into_int_value();
 
-    context.write_header(size, AddressSpace::Parent);
-    context.build_memcpy(
-        IntrinsicFunction::MemoryCopyToParent,
-        destination,
-        source,
-        size,
-        "return_memcpy_to_parent",
-    );
+    context.write_abi_data(offset, size);
     long_return(context, function)?;
 
     Ok(None)
@@ -61,30 +40,10 @@ where
 {
     let function = context.function().to_owned();
 
-    let source = context.access_memory(
-        arguments[0].into_int_value(),
-        AddressSpace::Heap,
-        "revert_source_pointer",
-    );
-
-    let destination = context.access_memory(
-        context.field_const(
-            (compiler_common::ABI_MEMORY_OFFSET_DATA * compiler_common::SIZE_FIELD) as u64,
-        ),
-        AddressSpace::Parent,
-        "revert_destination_pointer",
-    );
-
+    let offset = arguments[0].into_int_value();
     let size = arguments[1].into_int_value();
 
-    context.write_header(size, AddressSpace::Parent);
-    context.build_memcpy(
-        IntrinsicFunction::MemoryCopyToParent,
-        destination,
-        source,
-        size,
-        "revert_memcpy_to_parent",
-    );
+    context.write_abi_data(offset, size);
 
     context.build_unconditional_branch(function.throw_block);
     Ok(None)
@@ -101,7 +60,7 @@ where
 {
     let function = context.function().to_owned();
 
-    context.write_header(context.field_const(0), AddressSpace::Parent);
+    context.write_abi_data(context.field_const(0), context.field_const(0));
     long_return(context, function)?;
 
     Ok(None)
@@ -118,7 +77,7 @@ where
 {
     let function = context.function().to_owned();
 
-    context.write_header(context.field_const(0), AddressSpace::Parent);
+    context.write_abi_data(context.field_const(0), context.field_const(0));
 
     context.build_unconditional_branch(function.throw_block);
     Ok(None)
