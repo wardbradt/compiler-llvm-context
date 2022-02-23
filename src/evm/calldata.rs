@@ -20,7 +20,9 @@ where
     D: Dependency,
 {
     let parent_offset_pointer = context.access_memory(
-        context.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+        context.field_const(
+            (compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET * compiler_common::SIZE_FIELD) as u64,
+        ),
         AddressSpace::Heap,
         "calldata_parent_offset_pointer",
     );
@@ -47,7 +49,9 @@ where
     D: Dependency,
 {
     let length_pointer = context.access_memory(
-        context.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_LENGTH as u64),
+        context.field_const(
+            (compiler_common::ABI_MEMORY_OFFSET_DATA_LENGTH * compiler_common::SIZE_FIELD) as u64,
+        ),
         AddressSpace::Heap,
         "calldata_size_length_pointer",
     );
@@ -73,7 +77,9 @@ where
     );
 
     let parent_offset_pointer = context.access_memory(
-        context.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+        context.field_const(
+            (compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET * compiler_common::SIZE_FIELD) as u64,
+        ),
         AddressSpace::Heap,
         "calldata_copy_parent_offset_pointer",
     );
@@ -119,7 +125,9 @@ where
     );
 
     let parent_offset_pointer = context.access_memory(
-        context.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+        context.field_const(
+            (compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET * compiler_common::SIZE_FIELD) as u64,
+        ),
         AddressSpace::Heap,
         "calldata_codecopy_parent_offset_pointer",
     );

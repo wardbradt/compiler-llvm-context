@@ -697,7 +697,10 @@ where
     ///
     pub fn read_abi_data(&self) -> inkwell::values::IntValue<'ctx> {
         let data_offset_pointer = self.access_memory(
-            self.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+            self.field_const(
+                (compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET * compiler_common::SIZE_FIELD)
+                    as u64,
+            ),
             AddressSpace::Heap,
             "data_offset_pointer",
         );
@@ -706,7 +709,10 @@ where
             .into_int_value();
 
         let data_length_pointer = self.access_memory(
-            self.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+            self.field_const(
+                (compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET * compiler_common::SIZE_FIELD)
+                    as u64,
+            ),
             AddressSpace::Heap,
             "data_length_pointer",
         );
@@ -732,14 +738,20 @@ where
         data_length: inkwell::values::IntValue<'ctx>,
     ) {
         let data_offset_pointer = self.access_memory(
-            self.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET as u64),
+            self.field_const(
+                (compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET * compiler_common::SIZE_FIELD)
+                    as u64,
+            ),
             AddressSpace::Heap,
             "data_offset_pointer",
         );
         self.build_store(data_offset_pointer, data_offset);
 
         let data_length_pointer = self.access_memory(
-            self.field_const(compiler_common::ABI_MEMORY_OFFSET_DATA_LENGTH as u64),
+            self.field_const(
+                (compiler_common::ABI_MEMORY_OFFSET_DATA_LENGTH * compiler_common::SIZE_FIELD)
+                    as u64,
+            ),
             AddressSpace::Heap,
             "data_length_pointer",
         );
