@@ -61,7 +61,7 @@ where
     );
     let source = context.access_memory(
         source_offset,
-        AddressSpace::Parent,
+        AddressSpace::Child,
         "return_data_copy_source_pointer",
     );
 

@@ -780,8 +780,8 @@ where
         );
         let parent_error_code_pointer = self.access_memory(
             self.field_const(0),
-            AddressSpace::Parent,
-            "parent_error_code_pointer",
+            AddressSpace::Heap,
+            "error_code_pointer",
         );
         self.build_store(parent_error_code_pointer, error_code_shifted);
     }
