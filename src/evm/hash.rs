@@ -23,45 +23,34 @@ where
     let intrinsic = context.get_intrinsic_function(IntrinsicFunction::SwitchContext);
     context.build_call(intrinsic, &[], "keccak256_switch_context");
 
-    let child_pointer_header = context.access_memory(
-        context.field_const(0 /* TODO */),
-        AddressSpace::Child,
-        "keccak256_child_pointer_header",
-    );
-    context.build_store(child_pointer_header, input_size);
-
-    let child_pointer_data = context.access_memory(
-        context.field_const(0 /* TODO */),
-        AddressSpace::Child,
-        "keccak256_child_input_destination",
-    );
-    let heap_pointer = context.access_memory(
-        input_offset,
-        AddressSpace::Heap,
-        "keccak256_child_input_source",
-    );
-
-    context.build_memcpy(
-        IntrinsicFunction::MemoryCopyToChild,
-        child_pointer_data,
-        heap_pointer,
-        input_size,
-        "keccak256_memcpy_to_child",
-    );
-
     let intrinsic = context.get_intrinsic_function(IntrinsicFunction::StaticCall);
     let call_definition = context.builder().build_left_shift(
         context.field_const_str(compiler_common::ABI_ADDRESS_KECCAK256),
         context.field_const((compiler_common::BITLENGTH_X32) as u64),
         "",
     );
-    context.build_call(
-        intrinsic,
-        &[call_definition.as_basic_value_enum()],
-        "keccak256_call_external",
-    );
+    let result = context
+        .build_call(
+            intrinsic,
+            &[
+                call_definition.as_basic_value_enum(),
+                input_offset.as_basic_value_enum(),
+                input_size.as_basic_value_enum(),
+                context.field_const(0).as_basic_value_enum(),
+            ],
+            "keccak256_call_external",
+        )
+        .expect("Always returns a value");
 
-    let result = context.build_load(child_pointer_data, "keccak256_result");
+    let child_offset = context.builder().build_and(
+        result.into_int_value(),
+        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        "keccak256_child_offset",
+    );
+    let child_pointer =
+        context.access_memory(child_offset, AddressSpace::Child, "keccak256_child_pointer");
+
+    let result = context.build_load(child_pointer, "keccak256_result");
 
     Ok(Some(result))
 }

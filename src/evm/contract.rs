@@ -110,55 +110,40 @@ where
     let intrinsic = context.get_intrinsic_function(IntrinsicFunction::SwitchContext);
     context.build_call(intrinsic, &[], "contract_call_switch_context");
 
-    let child_pointer_header = context.access_memory(
-        context.field_const(0 /* TODO */),
-        AddressSpace::Child,
-        "contract_call_child_pointer_header",
-    );
-    context.build_store(child_pointer_header, input_size);
-
-    let destination = context.access_memory(
-        context.field_const(0 /* TODO */),
-        AddressSpace::Child,
-        "contract_call_child_input_destination",
-    );
-    let source = context.access_memory(
-        input_offset,
-        AddressSpace::Heap,
-        "contract_call_child_input_source",
-    );
-
-    context.build_memcpy(
-        IntrinsicFunction::MemoryCopyToChild,
-        destination,
-        source,
-        input_size,
-        "contract_call_memcpy_to_child",
-    );
-
     let intrinsic = context.get_intrinsic_function(call_type);
     let call_definition = context.builder().build_left_shift(
         address,
         context.field_const((compiler_common::BITLENGTH_X32) as u64),
         "",
     );
-    let is_call_successful = context
+    let result = context
         .build_call(
             intrinsic,
-            &[call_definition.as_basic_value_enum()],
+            &[
+                call_definition.as_basic_value_enum(),
+                input_offset.as_basic_value_enum(),
+                input_size.as_basic_value_enum(),
+                context.field_const(0).as_basic_value_enum(),
+            ],
             "contract_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
 
-    let source = context.access_memory(
-        context.field_const(0 /* TODO */),
-        AddressSpace::Child,
-        "contract_call_output_source",
+    let child_data_offset = context.builder().build_and(
+        result.into_int_value(),
+        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        "contract_call_child_data_offset",
     );
+    let source = context.access_memory(
+        child_data_offset,
+        AddressSpace::Child,
+        "contract_call_source",
+    );
+
     let destination = context.access_memory(
         output_offset,
         AddressSpace::Heap,
-        "contract_call_output_pointer",
+        "contract_call_destination",
     );
 
     context.build_memcpy(
@@ -169,7 +154,7 @@ where
         "contract_call_memcpy_from_child",
     );
 
-    Ok(is_call_successful)
+    Ok(context.field_const(1).as_basic_value_enum())
 }
 
 ///
