@@ -107,9 +107,6 @@ fn call_ordinary<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let intrinsic = context.get_intrinsic_function(IntrinsicFunction::SwitchContext);
-    context.build_call(intrinsic, &[], "contract_call_switch_context");
-
     let intrinsic = context.get_intrinsic_function(call_type);
     let call_definition = context.builder().build_left_shift(
         address,
@@ -117,7 +114,7 @@ where
         "",
     );
     let result = context
-        .build_call(
+        .build_invoke(
             intrinsic,
             &[
                 call_definition.as_basic_value_enum(),

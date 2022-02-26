@@ -20,9 +20,6 @@ pub fn keccak256<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let intrinsic = context.get_intrinsic_function(IntrinsicFunction::SwitchContext);
-    context.build_call(intrinsic, &[], "keccak256_switch_context");
-
     let intrinsic = context.get_intrinsic_function(IntrinsicFunction::StaticCall);
     let call_definition = context.builder().build_left_shift(
         context.field_const_str(compiler_common::ABI_ADDRESS_KECCAK256),

@@ -79,9 +79,6 @@ fn call_precompile<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let intrinsic = context.get_intrinsic_function(IntrinsicFunction::SwitchContext);
-    context.build_call(intrinsic, &[], "create_precompile_switch_context");
-
     let intrinsic = context.get_intrinsic_function(IntrinsicFunction::FarCall);
     let call_definition = context.builder().build_left_shift(
         context.field_const_str(compiler_common::ABI_ADDRESS_CREATE),
@@ -89,7 +86,7 @@ where
         "",
     );
     let result = context
-        .build_call(
+        .build_invoke(
             intrinsic,
             &[
                 call_definition.as_basic_value_enum(),

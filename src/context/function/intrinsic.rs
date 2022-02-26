@@ -22,14 +22,10 @@ pub enum Intrinsic {
     /// The event emitting.
     Event,
 
-    /// The contract context switch.
-    SwitchContext,
     /// The contract context getter.
     GetFromContext,
     /// The external contract call.
     FarCall,
-    /// The external contract code call.
-    CallCode,
     /// The external contract delegate call.
     DelegateCall,
     /// The external contract static call.
@@ -54,10 +50,8 @@ impl Intrinsic {
             Intrinsic::SetStorage => "llvm.syncvm.setstorage",
             Intrinsic::Event => "llvm.syncvm.event",
 
-            Intrinsic::SwitchContext => "llvm.syncvm.switchcontext",
             Intrinsic::GetFromContext => "llvm.syncvm.getfromcontext",
             Intrinsic::FarCall => "llvm.syncvm.farcall.rc",
-            Intrinsic::CallCode => "llvm.syncvm.callcode.rc",
             Intrinsic::DelegateCall => "llvm.syncvm.delegatecall.rc",
             Intrinsic::StaticCall => "llvm.syncvm.staticcall.rc",
 
@@ -83,10 +77,8 @@ impl Intrinsic {
             Self::SetStorage => vec![],
             Self::Event => vec![],
 
-            Self::SwitchContext => vec![],
             Self::GetFromContext => vec![],
             Self::FarCall => vec![],
-            Self::CallCode => vec![],
             Self::DelegateCall => vec![],
             Self::StaticCall => vec![],
 
