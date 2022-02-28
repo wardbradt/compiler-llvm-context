@@ -710,7 +710,7 @@ where
 
         let data_length_pointer = self.access_memory(
             self.field_const(
-                (compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET * compiler_common::SIZE_FIELD)
+                (compiler_common::ABI_MEMORY_OFFSET_DATA_LENGTH * compiler_common::SIZE_FIELD)
                     as u64,
             ),
             AddressSpace::Heap,
