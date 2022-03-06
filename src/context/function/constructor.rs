@@ -4,6 +4,7 @@
 
 use std::marker::PhantomData;
 
+use crate::context::code_type::CodeType;
 use crate::context::Context;
 use crate::Dependency;
 use crate::WriteLLVM;
@@ -64,6 +65,7 @@ where
         context.set_function(function);
 
         context.set_basic_block(context.function().entry_block);
+        context.code_type = Some(CodeType::Deploy);
         self.inner.into_llvm(context)?;
         match context
             .basic_block()

@@ -4,6 +4,7 @@
 
 use std::marker::PhantomData;
 
+use crate::context::code_type::CodeType;
 use crate::context::Context;
 use crate::Dependency;
 use crate::WriteLLVM;
@@ -62,8 +63,9 @@ where
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Contract selector not found"))?;
         context.set_function(function);
-        context.set_basic_block(context.function().entry_block);
 
+        context.set_basic_block(context.function().entry_block);
+        context.code_type = Some(CodeType::Runtime);
         self.inner.into_llvm(context)?;
         match context
             .basic_block()
