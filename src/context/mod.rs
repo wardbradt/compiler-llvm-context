@@ -4,6 +4,7 @@
 
 pub mod address_space;
 pub mod argument;
+pub mod code_type;
 pub mod function;
 pub mod r#loop;
 pub mod optimizer;
@@ -17,6 +18,7 @@ use crate::dump_flag::DumpFlag;
 use crate::Dependency;
 
 use self::address_space::AddressSpace;
+use self::code_type::CodeType;
 use self::function::intrinsic::Intrinsic as IntrinsicFunction;
 use self::function::r#return::Return as FunctionReturn;
 use self::function::runtime::Runtime;
@@ -44,6 +46,8 @@ where
     /// The loop context stack.
     loop_stack: Vec<Loop<'ctx>>,
 
+    /// The current contract code type, if known.
+    pub code_type: Option<CodeType>,
     /// The declared functions.
     pub functions: HashMap<String, Function<'ctx>>,
     /// The runtime functions.
@@ -95,6 +99,7 @@ where
             function: None,
             loop_stack: Vec::with_capacity(Self::LOOP_STACK_INITIAL_CAPACITY),
 
+            code_type: None,
             functions: HashMap::with_capacity(Self::FUNCTION_HASHMAP_INITIAL_CAPACITY),
             runtime,
 

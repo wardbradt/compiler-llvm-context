@@ -8,6 +8,7 @@ pub(crate) mod evm;
 
 pub use self::context::address_space::AddressSpace;
 pub use self::context::argument::Argument;
+pub use self::context::code_type::CodeType;
 pub use self::context::function::constructor::Constructor as ConstructorFunction;
 pub use self::context::function::entry::Entry as EntryFunction;
 pub use self::context::function::intrinsic::Intrinsic as IntrinsicFunction;
