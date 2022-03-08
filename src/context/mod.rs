@@ -639,8 +639,31 @@ where
             self.set_basic_block(no_long_return_block);
         }
 
-        self.build_call(
-            self.runtime.cxa_throw,
+        let cxa_throw_arguments = if is_upper_level {
+            let mut arguments = Vec::with_capacity(3);
+
+            let result_pointer = self.build_alloca(
+                self.integer_type(compiler_common::BITLENGTH_BYTE),
+                "result_pointer",
+            );
+            let result_value = self.read_abi_data().as_basic_value_enum();
+            let result_pointer_extended = self.builder().build_pointer_cast(
+                result_pointer,
+                self.field_type().ptr_type(AddressSpace::Stack.into()),
+                "result_pointer_extended",
+            );
+            self.build_store(result_pointer_extended, result_value);
+            arguments.push(result_pointer.as_basic_value_enum());
+
+            arguments.extend(vec![
+                self.integer_type(compiler_common::BITLENGTH_BYTE)
+                    .ptr_type(AddressSpace::Stack.into())
+                    .const_null()
+                    .as_basic_value_enum();
+                2
+            ]);
+            arguments
+        } else {
             vec![
                 self.integer_type(compiler_common::BITLENGTH_BYTE)
                     .ptr_type(AddressSpace::Stack.into())
@@ -648,7 +671,10 @@ where
                     .as_basic_value_enum();
                 3
             ]
-            .as_slice(),
+        };
+        self.build_call(
+            self.runtime.cxa_throw,
+            cxa_throw_arguments.as_slice(),
             compiler_common::LLVM_FUNCTION_CXA_THROW,
         );
         self.build_unreachable();
@@ -682,8 +708,31 @@ where
             self.set_basic_block(no_long_return_block);
         }
 
-        self.build_call(
-            self.runtime.cxa_throw,
+        let cxa_throw_arguments = if is_upper_level {
+            let mut arguments = Vec::with_capacity(3);
+
+            let result_pointer = self.build_alloca(
+                self.integer_type(compiler_common::BITLENGTH_BYTE),
+                "result_pointer",
+            );
+            let result_value = self.read_abi_data().as_basic_value_enum();
+            let result_pointer_extended = self.builder().build_pointer_cast(
+                result_pointer,
+                self.field_type().ptr_type(AddressSpace::Stack.into()),
+                "result_pointer_extended",
+            );
+            self.build_store(result_pointer_extended, result_value);
+            arguments.push(result_pointer.as_basic_value_enum());
+
+            arguments.extend(vec![
+                self.integer_type(compiler_common::BITLENGTH_BYTE)
+                    .ptr_type(AddressSpace::Stack.into())
+                    .const_null()
+                    .as_basic_value_enum();
+                2
+            ]);
+            arguments
+        } else {
             vec![
                 self.integer_type(compiler_common::BITLENGTH_BYTE)
                     .ptr_type(AddressSpace::Stack.into())
@@ -691,7 +740,10 @@ where
                     .as_basic_value_enum();
                 3
             ]
-            .as_slice(),
+        };
+        self.build_call(
+            self.runtime.cxa_throw,
+            cxa_throw_arguments.as_slice(),
             compiler_common::LLVM_FUNCTION_CXA_THROW,
         );
         self.build_unreachable();
