@@ -642,18 +642,14 @@ where
         let cxa_throw_arguments = if is_upper_level {
             let mut arguments = Vec::with_capacity(3);
 
-            let result_pointer = self.build_alloca(
-                self.integer_type(compiler_common::BITLENGTH_BYTE),
-                "result_pointer",
+            let result_value = self.read_abi_data();
+            let result_value_as_pointer = self.builder().build_int_to_ptr(
+                result_value,
+                self.integer_type(compiler_common::BITLENGTH_BYTE)
+                    .ptr_type(AddressSpace::Stack.into()),
+                "result_value_as_pointer",
             );
-            let result_value = self.read_abi_data().as_basic_value_enum();
-            let result_pointer_extended = self.builder().build_pointer_cast(
-                result_pointer,
-                self.field_type().ptr_type(AddressSpace::Stack.into()),
-                "result_pointer_extended",
-            );
-            self.build_store(result_pointer_extended, result_value);
-            arguments.push(result_pointer.as_basic_value_enum());
+            arguments.push(result_value_as_pointer.as_basic_value_enum());
 
             arguments.extend(vec![
                 self.integer_type(compiler_common::BITLENGTH_BYTE)
@@ -711,18 +707,14 @@ where
         let cxa_throw_arguments = if is_upper_level {
             let mut arguments = Vec::with_capacity(3);
 
-            let result_pointer = self.build_alloca(
-                self.integer_type(compiler_common::BITLENGTH_BYTE),
-                "result_pointer",
+            let result_value = self.read_abi_data();
+            let result_value_as_pointer = self.builder().build_int_to_ptr(
+                result_value,
+                self.integer_type(compiler_common::BITLENGTH_BYTE)
+                    .ptr_type(AddressSpace::Stack.into()),
+                "result_value_as_pointer",
             );
-            let result_value = self.read_abi_data().as_basic_value_enum();
-            let result_pointer_extended = self.builder().build_pointer_cast(
-                result_pointer,
-                self.field_type().ptr_type(AddressSpace::Stack.into()),
-                "result_pointer_extended",
-            );
-            self.build_store(result_pointer_extended, result_value);
-            arguments.push(result_pointer.as_basic_value_enum());
+            arguments.push(result_value_as_pointer.as_basic_value_enum());
 
             arguments.extend(vec![
                 self.integer_type(compiler_common::BITLENGTH_BYTE)
