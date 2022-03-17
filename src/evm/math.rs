@@ -116,58 +116,9 @@ pub fn sign_extend<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let bitlength = context.builder().build_int_mul(
-        arguments[0].into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_BYTE as u64),
-        "sign_extend_bitlength_multiplied",
-    );
-    let bitlength = context.builder().build_int_add(
-        bitlength,
-        context.field_const((compiler_common::BITLENGTH_BYTE - 1) as u64),
-        "sign_extend_bitlength",
-    );
-    let sign_mask = context.builder().build_left_shift(
-        context.field_const(1),
-        bitlength,
-        "sign_extend_sign_mask",
-    );
-    let sign_bit = context.builder().build_and(
-        arguments[1].into_int_value(),
-        sign_mask,
-        "sign_extend_sign_bit",
-    );
-    let sign_bit_truncated = context.builder().build_right_shift(
-        sign_bit,
-        bitlength,
-        false,
-        "sign_extend_sign_bit_truncated",
-    );
-
-    let value_mask = context.builder().build_int_sub(
-        sign_mask,
-        context.field_const(1),
-        "sign_extend_value_mask",
-    );
-    let value = context.builder().build_and(
-        arguments[1].into_int_value(),
-        value_mask,
-        "sign_extend_value",
-    );
-
-    let sign_fill_bits = context.builder().build_xor(
-        value_mask,
-        context.field_type().const_all_ones(),
-        "sign_fill_bits",
-    );
-    let sign_fill_bits_checked = context.builder().build_int_mul(
-        sign_fill_bits,
-        sign_bit_truncated,
-        "sign_fill_bits_checked",
-    );
-    let result =
-        context
-            .builder()
-            .build_int_add(value, sign_fill_bits_checked, "sign_extend_result");
-
-    Ok(Some(result.as_basic_value_enum()))
+    Ok(context.build_invoke(
+        context.runtime.signextend,
+        &[arguments[0], arguments[1]],
+        "sign_extend_call",
+    ))
 }
