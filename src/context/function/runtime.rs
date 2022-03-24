@@ -19,6 +19,8 @@ pub struct Runtime<'ctx> {
     pub addmod: inkwell::values::FunctionValue<'ctx>,
     /// The `__mulmod` runtime function.
     pub mulmod: inkwell::values::FunctionValue<'ctx>,
+    /// The `__signextend` runtime function.
+    pub signextend: inkwell::values::FunctionValue<'ctx>,
 }
 
 impl<'ctx> Runtime<'ctx> {
@@ -83,11 +85,27 @@ impl<'ctx> Runtime<'ctx> {
             Some(inkwell::module::Linkage::External),
         );
 
+        let signextend = module.add_function(
+            compiler_common::LLVM_FUNCTION_SIGNEXTEND,
+            llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                .fn_type(
+                    vec![
+                        llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                            .as_basic_type_enum();
+                        2
+                    ]
+                    .as_slice(),
+                    false,
+                ),
+            Some(inkwell::module::Linkage::External),
+        );
+
         Self {
             personality,
             cxa_throw,
             addmod,
             mulmod,
+            signextend,
         }
     }
 }
