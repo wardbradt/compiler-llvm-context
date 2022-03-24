@@ -701,7 +701,7 @@ where
             self.set_basic_block(no_long_return_block);
         }
 
-        let cxa_throw_arguments = if is_upper_level {
+        let cxa_throw_arguments = if handles_long_return {
             let mut arguments = Vec::with_capacity(3);
 
             let result_value = self.read_abi_data();
