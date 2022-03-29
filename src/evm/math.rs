@@ -18,7 +18,7 @@ where
     D: Dependency,
 {
     Ok(context.build_invoke(
-        context.runtime.addmod,
+        context.runtime.add_mod,
         &[arguments[0], arguments[1], arguments[2]],
         "add_mod_call",
     ))
@@ -35,7 +35,7 @@ where
     D: Dependency,
 {
     Ok(context.build_invoke(
-        context.runtime.mulmod,
+        context.runtime.mul_mod,
         &[arguments[0], arguments[1], arguments[2]],
         "mul_mod_call",
     ))
@@ -117,7 +117,7 @@ where
     D: Dependency,
 {
     Ok(context.build_invoke(
-        context.runtime.signextend,
+        context.runtime.sign_extend,
         &[arguments[0], arguments[1]],
         "sign_extend_call",
     ))

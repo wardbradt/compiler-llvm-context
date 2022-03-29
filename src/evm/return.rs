@@ -3,6 +3,7 @@
 //!
 
 use crate::context::address_space::AddressSpace;
+use crate::context::function::runtime::Runtime;
 use crate::context::function::Function;
 use crate::context::Context;
 use crate::Dependency;
@@ -93,8 +94,8 @@ fn long_return<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    if context.function().name == compiler_common::LLVM_FUNCTION_SELECTOR
-        || context.function().name == compiler_common::LLVM_FUNCTION_CONSTRUCTOR
+    if context.function().name == Runtime::FUNCTION_SELECTOR
+        || context.function().name == Runtime::FUNCTION_CONSTRUCTOR
     {
         context.build_unconditional_branch(function.return_block);
     } else {

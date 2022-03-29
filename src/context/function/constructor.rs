@@ -5,6 +5,7 @@
 use std::marker::PhantomData;
 
 use crate::context::code_type::CodeType;
+use crate::context::function::runtime::Runtime;
 use crate::context::Context;
 use crate::Dependency;
 use crate::WriteLLVM;
@@ -48,7 +49,7 @@ where
     fn declare(&mut self, context: &mut Context<D>) -> anyhow::Result<()> {
         let function_type = context.function_type(0, vec![]);
         context.add_function(
-            compiler_common::LLVM_FUNCTION_CONSTRUCTOR,
+            Runtime::FUNCTION_CONSTRUCTOR,
             function_type,
             Some(inkwell::module::Linkage::Private),
         );
@@ -59,7 +60,7 @@ where
     fn into_llvm(self, context: &mut Context<D>) -> anyhow::Result<()> {
         let function = context
             .functions
-            .get(compiler_common::LLVM_FUNCTION_CONSTRUCTOR)
+            .get(Runtime::FUNCTION_CONSTRUCTOR)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Contract constructor not found"))?;
         context.set_function(function);

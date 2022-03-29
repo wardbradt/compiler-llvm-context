@@ -516,7 +516,7 @@ where
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
         let call_site_value = self.builder.build_call(function, args, name);
 
-        if name == compiler_common::LLVM_FUNCTION_CXA_THROW {
+        if name == Runtime::FUNCTION_CXA_THROW {
             return call_site_value.try_as_basic_value().left();
         }
 
@@ -733,7 +733,7 @@ where
         self.build_call(
             self.runtime.cxa_throw,
             cxa_throw_arguments.as_slice(),
-            compiler_common::LLVM_FUNCTION_CXA_THROW,
+            Runtime::FUNCTION_CXA_THROW,
         );
         self.build_unreachable();
     }
@@ -798,7 +798,7 @@ where
         self.build_call(
             self.runtime.cxa_throw,
             cxa_throw_arguments.as_slice(),
-            compiler_common::LLVM_FUNCTION_CXA_THROW,
+            Runtime::FUNCTION_CXA_THROW,
         );
         self.build_unreachable();
     }

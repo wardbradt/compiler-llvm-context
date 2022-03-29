@@ -2,6 +2,7 @@
 //! Translates a contract call.
 //!
 
+use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
 use crate::context::address_space::AddressSpace;
@@ -16,7 +17,7 @@ use crate::Dependency;
 #[allow(clippy::too_many_arguments)]
 pub fn call<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
-    call_type: IntrinsicFunction,
+    function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
     value: Option<inkwell::values::IntValue<'ctx>>,
     input_offset: inkwell::values::IntValue<'ctx>,
@@ -54,7 +55,7 @@ where
     context.set_basic_block(ordinary_block);
     let result = call_ordinary(
         context,
-        call_type,
+        function,
         address,
         input_offset,
         input_size,
@@ -97,7 +98,7 @@ where
 ///
 fn call_ordinary<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
-    call_type: IntrinsicFunction,
+    function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
     input_offset: inkwell::values::IntValue<'ctx>,
     input_size: inkwell::values::IntValue<'ctx>,
@@ -107,27 +108,66 @@ fn call_ordinary<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let intrinsic = context.get_intrinsic_function(call_type);
-    let call_definition = context.builder().build_left_shift(
-        address,
-        context.field_const((compiler_common::BITLENGTH_X32) as u64),
-        "",
+    let input_size_shifted = context.builder().build_left_shift(
+        input_size,
+        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        "contract_call_input_size_shifted",
     );
-    let result = context
+    let abi_data =
+        context
+            .builder()
+            .build_int_add(input_size_shifted, input_offset, "contract_call_abi_data");
+
+    let result_type = context
+        .structure_type(vec![
+            context
+                .integer_type(compiler_common::BITLENGTH_FIELD)
+                .as_basic_type_enum(),
+            context
+                .integer_type(compiler_common::BITLENGTH_BOOLEAN)
+                .as_basic_type_enum(),
+        ])
+        .as_basic_type_enum();
+    let result_pointer = context.build_alloca(result_type, "contract_call_result_pointer");
+
+    let result_pointer = context
         .build_invoke(
-            intrinsic,
+            function,
             &[
-                call_definition.as_basic_value_enum(),
-                input_offset.as_basic_value_enum(),
-                input_size.as_basic_value_enum(),
-                context.field_const(0).as_basic_value_enum(),
+                abi_data.as_basic_value_enum(),
+                address.as_basic_value_enum(),
+                result_pointer.as_basic_value_enum(),
             ],
             "contract_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
+    let result_abi_data_pointer = context
+        .builder()
+        .build_struct_gep(
+            result_pointer.into_pointer_value(),
+            0,
+            "contract_call_external_result_abi_data_pointer",
+        )
+        .expect("Always valid");
+    let result_abi_data = context.build_load(
+        result_abi_data_pointer,
+        "contract_call_external_result_abi_data",
+    );
+    let result_status_code_pointer = context
+        .builder()
+        .build_struct_gep(
+            result_pointer.into_pointer_value(),
+            0,
+            "contract_call_external_result_status_code_pointer",
+        )
+        .expect("Always valid");
+    let result_status_code = context.build_load(
+        result_status_code_pointer,
+        "contract_call_external_result_status_code",
+    );
 
     let child_data_offset = context.builder().build_and(
-        result.into_int_value(),
+        result_abi_data.into_int_value(),
         context.field_const(compiler_common::BITLENGTH_X32 as u64),
         "contract_call_child_data_offset",
     );
@@ -151,7 +191,7 @@ where
         "contract_call_memcpy_from_child",
     );
 
-    Ok(context.field_const(1).as_basic_value_enum())
+    Ok(result_status_code)
 }
 
 ///

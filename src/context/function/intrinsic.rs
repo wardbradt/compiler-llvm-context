@@ -13,10 +13,6 @@ use crate::Dependency;
 ///
 #[derive(Debug, Clone)]
 pub enum Intrinsic {
-    /// The contract storage load.
-    StorageLoad,
-    /// The contract storage store.
-    StorageStore,
     /// The contract storage set.
     SetStorage,
     /// The event emitting.
@@ -24,12 +20,6 @@ pub enum Intrinsic {
 
     /// The contract context getter.
     GetFromContext,
-    /// The external contract call.
-    FarCall,
-    /// The external contract delegate call.
-    DelegateCall,
-    /// The external contract static call.
-    StaticCall,
 
     /// The memory copy within the heap.
     MemoryCopy,
@@ -45,15 +35,10 @@ impl Intrinsic {
     ///
     pub fn name(&self) -> &'static str {
         match self {
-            Intrinsic::StorageLoad => "llvm.syncvm.sload",
-            Intrinsic::StorageStore => "llvm.syncvm.sstore",
             Intrinsic::SetStorage => "llvm.syncvm.setstorage",
             Intrinsic::Event => "llvm.syncvm.event",
 
             Intrinsic::GetFromContext => "llvm.syncvm.getfromcontext",
-            Intrinsic::FarCall => "llvm.syncvm.farcall.rc",
-            Intrinsic::DelegateCall => "llvm.syncvm.delegatecall.rc",
-            Intrinsic::StaticCall => "llvm.syncvm.staticcall.rc",
 
             Intrinsic::MemoryCopy => "llvm.memcpy",
             Intrinsic::MemoryCopyFromParent => "llvm.memcpy",
@@ -72,15 +57,10 @@ impl Intrinsic {
         D: Dependency,
     {
         match self {
-            Self::StorageLoad => vec![],
-            Self::StorageStore => vec![],
             Self::SetStorage => vec![],
             Self::Event => vec![],
 
             Self::GetFromContext => vec![],
-            Self::FarCall => vec![],
-            Self::DelegateCall => vec![],
-            Self::StaticCall => vec![],
 
             Self::MemoryCopy => vec![
                 context

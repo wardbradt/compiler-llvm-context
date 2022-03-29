@@ -4,7 +4,6 @@
 
 use inkwell::values::BasicValue;
 
-use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::Context;
 use crate::Dependency;
 
@@ -18,12 +17,11 @@ pub fn load<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let intrinsic = context.get_intrinsic_function(IntrinsicFunction::StorageLoad);
     let position = arguments[0];
     let is_external_storage = context.field_const(0);
     let value = context
-        .build_call(
-            intrinsic,
+        .build_invoke(
+            context.runtime.storage_load,
             &[position, is_external_storage.as_basic_value_enum()],
             "storage_value",
         )
@@ -41,12 +39,11 @@ pub fn store<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let intrinsic = context.get_intrinsic_function(IntrinsicFunction::StorageStore);
     let position = arguments[0];
     let value = arguments[1];
     let is_external_storage = context.field_const(0);
-    context.build_call(
-        intrinsic,
+    context.build_invoke(
+        context.runtime.storage_store,
         &[value, position, is_external_storage.as_basic_value_enum()],
         "storage_store",
     );

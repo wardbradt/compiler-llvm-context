@@ -5,6 +5,7 @@
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
+use crate::context::function::runtime::Runtime;
 use crate::context::Context;
 use crate::Dependency;
 use crate::WriteLLVM;
@@ -33,7 +34,7 @@ where
             ],
         );
         context.add_function(
-            compiler_common::LLVM_FUNCTION_ENTRY,
+            Runtime::FUNCTION_ENTRY,
             function_type,
             Some(inkwell::module::Linkage::External),
         );
@@ -44,7 +45,7 @@ where
     fn into_llvm(self, context: &mut Context<D>) -> anyhow::Result<()> {
         let function = context
             .functions
-            .get(compiler_common::LLVM_FUNCTION_ENTRY)
+            .get(Runtime::FUNCTION_ENTRY)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Contract entry not found"))?;
         context.set_function(function);
@@ -54,12 +55,12 @@ where
 
         let constructor = context
             .functions
-            .get(compiler_common::LLVM_FUNCTION_CONSTRUCTOR)
+            .get(Runtime::FUNCTION_CONSTRUCTOR)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Contract constructor not found"))?;
         let selector = context
             .functions
-            .get(compiler_common::LLVM_FUNCTION_SELECTOR)
+            .get(Runtime::FUNCTION_SELECTOR)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("Contract selector not found"))?;
 

@@ -6,7 +6,6 @@ use inkwell::values::BasicValue;
 
 use crate::context::address_space::AddressSpace;
 use crate::context::argument::Argument;
-use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::Context;
 use crate::Dependency;
 
@@ -79,7 +78,6 @@ fn call_precompile<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let intrinsic = context.get_intrinsic_function(IntrinsicFunction::FarCall);
     let call_definition = context.builder().build_left_shift(
         context.field_const_str(compiler_common::ABI_ADDRESS_CREATE),
         context.field_const((compiler_common::BITLENGTH_X32) as u64),
@@ -87,7 +85,7 @@ where
     );
     let result = context
         .build_invoke(
-            intrinsic,
+            context.runtime.far_call,
             &[
                 call_definition.as_basic_value_enum(),
                 hash.as_basic_value_enum(),
