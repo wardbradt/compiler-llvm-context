@@ -160,7 +160,7 @@ impl<'ctx> Runtime<'ctx> {
                     vec![
                         llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
                             .as_basic_type_enum();
-                        2
+                        1
                     ]
                     .as_slice(),
                     false,
@@ -174,7 +174,7 @@ impl<'ctx> Runtime<'ctx> {
                     vec![
                         llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
                             .as_basic_type_enum();
-                        3
+                        2
                     ]
                     .as_slice(),
                     false,

@@ -2,8 +2,6 @@
 //! Translates the contract storage operations.
 //!
 
-use inkwell::values::BasicValue;
-
 use crate::context::Context;
 use crate::Dependency;
 
@@ -18,13 +16,8 @@ where
     D: Dependency,
 {
     let position = arguments[0];
-    let is_external_storage = context.field_const(0);
     let value = context
-        .build_invoke(
-            context.runtime.storage_load,
-            &[position, is_external_storage.as_basic_value_enum()],
-            "storage_value",
-        )
+        .build_invoke(context.runtime.storage_load, &[position], "storage_value")
         .expect("Contract storage always returns a value");
     Ok(Some(value))
 }
@@ -41,10 +34,9 @@ where
 {
     let position = arguments[0];
     let value = arguments[1];
-    let is_external_storage = context.field_const(0);
     context.build_invoke(
         context.runtime.storage_store,
-        &[value, position, is_external_storage.as_basic_value_enum()],
+        &[value, position],
         "storage_store",
     );
     Ok(None)
