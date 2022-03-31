@@ -191,6 +191,7 @@ impl<'ctx> Runtime<'ctx> {
                 ],
                 false,
             )
+            .ptr_type(AddressSpace::Stack.into())
             .as_basic_type_enum();
         let far_call = module.add_function(
             Self::FUNCTION_FARCALL,
