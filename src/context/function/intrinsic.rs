@@ -13,13 +13,11 @@ use crate::Dependency;
 ///
 #[derive(Debug, Clone)]
 pub enum Intrinsic {
-    /// The contract storage set.
-    SetStorage,
     /// The event emitting.
     Event,
 
     /// The contract context getter.
-    GetFromContext,
+    Context,
 
     /// The memory copy within the heap.
     MemoryCopy,
@@ -35,10 +33,9 @@ impl Intrinsic {
     ///
     pub fn name(&self) -> &'static str {
         match self {
-            Intrinsic::SetStorage => "llvm.syncvm.setstorage",
             Intrinsic::Event => "llvm.syncvm.event",
 
-            Intrinsic::GetFromContext => "llvm.syncvm.getfromcontext",
+            Intrinsic::Context => "llvm.syncvm.context",
 
             Intrinsic::MemoryCopy => "llvm.memcpy",
             Intrinsic::MemoryCopyFromParent => "llvm.memcpy",
@@ -57,10 +54,9 @@ impl Intrinsic {
         D: Dependency,
     {
         match self {
-            Self::SetStorage => vec![],
             Self::Event => vec![],
 
-            Self::GetFromContext => vec![],
+            Self::Context => vec![],
 
             Self::MemoryCopy => vec![
                 context

@@ -1001,7 +1001,7 @@ where
         &self,
         context_value: compiler_common::ContextValue,
     ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
-        let intrinsic = self.get_intrinsic_function(IntrinsicFunction::GetFromContext);
+        let intrinsic = self.get_intrinsic_function(IntrinsicFunction::Context);
         let value = self
             .build_call(
                 intrinsic,

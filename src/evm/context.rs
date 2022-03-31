@@ -18,7 +18,7 @@ pub fn get<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let intrinsic = context.get_intrinsic_function(IntrinsicFunction::GetFromContext);
+    let intrinsic = context.get_intrinsic_function(IntrinsicFunction::Context);
     let value = context
         .build_call(
             intrinsic,
