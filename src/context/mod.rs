@@ -640,9 +640,8 @@ where
     ///
     /// Builds an exception catching block sequence.
     ///
-    pub fn build_catch_block(&self, handles_long_return: bool) {
+    pub fn build_catch_block(&self) {
         self.set_basic_block(self.function().catch_block);
-
         let landing_pad_type = self.structure_type(vec![
             self.integer_type(compiler_common::BITLENGTH_BYTE)
                 .ptr_type(AddressSpace::Stack.into())
@@ -660,64 +659,13 @@ where
                 .as_basic_value_enum()],
             "landing",
         );
-
-        if handles_long_return {
-            let no_long_return_block = self.append_basic_block("no_long_return_block");
-            let long_return_flag_pointer = self.access_memory(
-                self.field_const(
-                    (compiler_common::ABI_MEMORY_OFFSET_LONG_RETURN * compiler_common::SIZE_FIELD)
-                        as u64,
-                ),
-                AddressSpace::Heap,
-                "long_return_flag_pointer",
-            );
-            let long_return_flag = self.build_load(long_return_flag_pointer, "long_return_flag");
-            let is_long_return_flag_set = self.builder.build_int_compare(
-                inkwell::IntPredicate::EQ,
-                long_return_flag.into_int_value(),
-                self.field_const(1),
-                "is_long_return_flag_set",
-            );
-            self.build_conditional_branch(
-                is_long_return_flag_set,
-                self.function().return_block,
-                no_long_return_block,
-            );
-            self.set_basic_block(no_long_return_block);
-        }
-
-        let cxa_throw_arguments = if handles_long_return {
-            let mut arguments = Vec::with_capacity(3);
-
-            let result_value = self.read_abi_data();
-            let result_value_as_pointer = self.builder().build_int_to_ptr(
-                result_value,
-                self.integer_type(compiler_common::BITLENGTH_BYTE)
-                    .ptr_type(AddressSpace::Stack.into()),
-                "result_value_as_pointer",
-            );
-            arguments.push(result_value_as_pointer.as_basic_value_enum());
-
-            arguments.extend(vec![
-                self.integer_type(compiler_common::BITLENGTH_BYTE)
-                    .ptr_type(AddressSpace::Stack.into())
-                    .const_null()
-                    .as_basic_value_enum();
-                2
-            ]);
-            arguments
-        } else {
-            vec![
-                self.integer_type(compiler_common::BITLENGTH_BYTE)
-                    .ptr_type(AddressSpace::Stack.into())
-                    .const_null()
-                    .as_basic_value_enum();
-                3
-            ]
-        };
         self.build_call(
             self.runtime.cxa_throw,
-            cxa_throw_arguments.as_slice(),
+            &[self
+                .integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Stack.into())
+                .const_null()
+                .as_basic_value_enum(); 3],
             Runtime::FUNCTION_CXA_THROW,
         );
         self.build_unreachable();
@@ -726,67 +674,83 @@ where
     ///
     /// Builds an error throwing block sequence.
     ///
-    pub fn build_throw_block(&self, is_upper_level: bool) {
+    pub fn build_throw_block(&self) {
         self.set_basic_block(self.function().throw_block);
-
-        if is_upper_level {
-            let no_long_return_block = self.append_basic_block("no_long_return_block");
-            let long_return_flag_pointer = self.access_memory(
-                self.field_const(
-                    (compiler_common::ABI_MEMORY_OFFSET_LONG_RETURN * compiler_common::SIZE_FIELD)
-                        as u64,
-                ),
-                AddressSpace::Heap,
-                "long_return_flag_pointer",
-            );
-            let long_return_flag = self.build_load(long_return_flag_pointer, "long_return_flag");
-            let is_long_return_flag_set = self.builder.build_int_compare(
-                inkwell::IntPredicate::EQ,
-                long_return_flag.into_int_value(),
-                self.field_const(1),
-                "is_long_return_flag_set",
-            );
-            self.build_conditional_branch(
-                is_long_return_flag_set,
-                self.function().return_block,
-                no_long_return_block,
-            );
-            self.set_basic_block(no_long_return_block);
-        }
-
-        let cxa_throw_arguments = if is_upper_level {
-            let mut arguments = Vec::with_capacity(3);
-
-            let result_value = self.read_abi_data();
-            let result_value_as_pointer = self.builder().build_int_to_ptr(
-                result_value,
-                self.integer_type(compiler_common::BITLENGTH_BYTE)
-                    .ptr_type(AddressSpace::Stack.into()),
-                "result_value_as_pointer",
-            );
-            arguments.push(result_value_as_pointer.as_basic_value_enum());
-
-            arguments.extend(vec![
-                self.integer_type(compiler_common::BITLENGTH_BYTE)
-                    .ptr_type(AddressSpace::Stack.into())
-                    .const_null()
-                    .as_basic_value_enum();
-                2
-            ]);
-            arguments
-        } else {
-            vec![
-                self.integer_type(compiler_common::BITLENGTH_BYTE)
-                    .ptr_type(AddressSpace::Stack.into())
-                    .const_null()
-                    .as_basic_value_enum();
-                3
-            ]
-        };
         self.build_call(
             self.runtime.cxa_throw,
-            cxa_throw_arguments.as_slice(),
+            &[self
+                .integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Stack.into())
+                .const_null()
+                .as_basic_value_enum(); 3],
             Runtime::FUNCTION_CXA_THROW,
+        );
+        self.build_unreachable();
+    }
+
+    ///
+    /// Builds a long contract exit sequence.
+    ///
+    pub fn build_exit(
+        &self,
+        return_function: IntrinsicFunction,
+        offset: inkwell::values::IntValue<'ctx>,
+        length: inkwell::values::IntValue<'ctx>,
+    ) {
+        let length_shifted = self.builder.build_left_shift(
+            length,
+            self.field_const(compiler_common::BITLENGTH_X32 as u64),
+            "contract_exit_length_shifted",
+        );
+        let abi_data = self
+            .builder
+            .build_int_add(length_shifted, offset, "contract_exit_abi_data");
+
+        self.build_call(
+            self.get_intrinsic_function(return_function),
+            &[abi_data.as_basic_value_enum()],
+            format!("contract_exit_{}", return_function.name()).as_str(),
+        );
+        self.build_unreachable();
+    }
+
+    ///
+    /// Builds a long contract exit with message sequence.
+    ///
+    pub fn build_exit_with_message(&self, return_function: IntrinsicFunction, message: &str) {
+        let length_shifted = self.builder.build_left_shift(
+            self.field_const(compiler_common::SIZE_X32 as u64),
+            self.field_const(compiler_common::BITLENGTH_X32 as u64),
+            "contract_exit_with_message_length_shifted",
+        );
+        let abi_data = self.builder.build_int_add(
+            length_shifted,
+            self.field_const(0),
+            "contract_exit_with_message_abi_data",
+        );
+
+        let error_hash = compiler_common::keccak256(message.as_bytes());
+        let error_code = self.field_const_str(error_hash.as_str());
+        let error_code_shifted = self.builder.build_left_shift(
+            error_code,
+            self.field_const(
+                (compiler_common::BITLENGTH_BYTE
+                    * (compiler_common::SIZE_FIELD - compiler_common::SIZE_X32))
+                    as u64,
+            ),
+            "contract_exit_with_message_error_code_shifted",
+        );
+        let parent_error_code_pointer = self.access_memory(
+            self.field_const(0),
+            AddressSpace::Heap,
+            "contract_exit_with_message_error_code_pointer",
+        );
+        self.build_store(parent_error_code_pointer, error_code_shifted);
+
+        self.build_call(
+            self.get_intrinsic_function(return_function),
+            &[abi_data.as_basic_value_enum()],
+            format!("contract_exit_with_message_{}", return_function.name()).as_str(),
         );
         self.build_unreachable();
     }
@@ -855,34 +819,6 @@ where
             "data_length_pointer",
         );
         self.build_store(data_length_pointer, data_length);
-    }
-
-    ///
-    /// Writes the error data to the parent memory.
-    ///
-    pub fn write_error(&self, message: &'static str) {
-        self.write_abi_data(
-            self.field_const(0),
-            self.field_const(compiler_common::SIZE_X32 as u64),
-        );
-
-        let error_hash = compiler_common::keccak256(message.as_bytes());
-        let error_code = self.field_const_str(error_hash.as_str());
-        let error_code_shifted = self.builder.build_left_shift(
-            error_code,
-            self.field_const(
-                (compiler_common::BITLENGTH_BYTE
-                    * (compiler_common::SIZE_FIELD - compiler_common::SIZE_X32))
-                    as u64,
-            ),
-            "error_code_shifted",
-        );
-        let parent_error_code_pointer = self.access_memory(
-            self.field_const(0),
-            AddressSpace::Heap,
-            "error_code_pointer",
-        );
-        self.build_store(parent_error_code_pointer, error_code_shifted);
     }
 
     ///

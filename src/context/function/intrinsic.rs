@@ -11,13 +11,18 @@ use crate::Dependency;
 ///
 /// The LLVM intrinsic function.
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Intrinsic {
     /// The event emitting.
     Event,
 
     /// The contract context getter.
     Context,
+
+    /// The long return.
+    Return,
+    /// The long revert.
+    Revert,
 
     /// The memory copy within the heap.
     MemoryCopy,
@@ -36,6 +41,9 @@ impl Intrinsic {
             Intrinsic::Event => "llvm.syncvm.event",
 
             Intrinsic::Context => "llvm.syncvm.context",
+
+            Intrinsic::Return => "llvm.syncvm.return",
+            Intrinsic::Revert => "llvm.syncvm.revert",
 
             Intrinsic::MemoryCopy => "llvm.memcpy",
             Intrinsic::MemoryCopyFromParent => "llvm.memcpy",
@@ -57,6 +65,9 @@ impl Intrinsic {
             Self::Event => vec![],
 
             Self::Context => vec![],
+
+            Self::Return => vec![],
+            Self::Revert => vec![],
 
             Self::MemoryCopy => vec![
                 context

@@ -18,6 +18,7 @@ pub mod r#return;
 pub mod return_data;
 pub mod storage;
 
+use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::Context;
 use crate::Dependency;
 
@@ -45,8 +46,10 @@ pub fn check_value_zero<'ctx, 'dep, D>(
     context.build_conditional_branch(is_value_zero, value_zero_block, value_non_zero_block);
 
     context.set_basic_block(value_non_zero_block);
-    context.write_error(compiler_common::ABI_ERROR_FORBIDDEN_SEND_TRANSFER);
-    context.build_unconditional_branch(context.function().throw_block);
+    context.build_exit_with_message(
+        IntrinsicFunction::Revert,
+        compiler_common::ABI_ERROR_FORBIDDEN_SEND_TRANSFER,
+    );
 
     context.set_basic_block(value_zero_block);
 }

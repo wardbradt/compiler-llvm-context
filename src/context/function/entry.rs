@@ -91,15 +91,15 @@ where
         );
 
         context.set_basic_block(constructor_call_block);
-        context.build_invoke(constructor.value, &[], "constructor_call");
+        context.build_call(constructor.value, &[], "constructor_call");
         context.build_unconditional_branch(context.function().return_block);
 
         context.set_basic_block(selector_call_block);
-        context.build_invoke(selector.value, &[], "selector_call");
+        context.build_call(selector.value, &[], "selector_call");
         context.build_unconditional_branch(context.function().return_block);
 
-        context.build_throw_block(true);
-        context.build_catch_block(true);
+        context.build_throw_block();
+        context.build_catch_block();
 
         context.set_basic_block(context.function().return_block);
         let return_value = context.read_abi_data().as_basic_value_enum();

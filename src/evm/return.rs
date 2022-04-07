@@ -2,9 +2,7 @@
 //! Translates the transaction return operations.
 //!
 
-use crate::context::address_space::AddressSpace;
-use crate::context::function::runtime::Runtime;
-use crate::context::function::Function;
+use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::Context;
 use crate::Dependency;
 
@@ -18,14 +16,10 @@ pub fn r#return<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let function = context.function().to_owned();
-
     let offset = arguments[0].into_int_value();
     let size = arguments[1].into_int_value();
 
-    context.write_abi_data(offset, size);
-    long_return(context, function)?;
-
+    context.build_exit(IntrinsicFunction::Return, offset, size);
     Ok(None)
 }
 
@@ -39,14 +33,10 @@ pub fn revert<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let function = context.function().to_owned();
-
     let offset = arguments[0].into_int_value();
     let size = arguments[1].into_int_value();
 
-    context.write_abi_data(offset, size);
-
-    context.build_unconditional_branch(function.throw_block);
+    context.build_exit(IntrinsicFunction::Revert, offset, size);
     Ok(None)
 }
 
@@ -59,11 +49,11 @@ pub fn stop<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let function = context.function().to_owned();
-
-    context.write_abi_data(context.field_const(0), context.field_const(0));
-    long_return(context, function)?;
-
+    context.build_exit(
+        IntrinsicFunction::Return,
+        context.field_const(0),
+        context.field_const(0),
+    );
     Ok(None)
 }
 
@@ -76,40 +66,10 @@ pub fn invalid<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let function = context.function().to_owned();
-
-    context.write_abi_data(context.field_const(0), context.field_const(0));
-
-    context.build_unconditional_branch(function.throw_block);
+    context.build_exit(
+        IntrinsicFunction::Revert,
+        context.field_const(0),
+        context.field_const(0),
+    );
     Ok(None)
-}
-
-///
-/// Generates the long return sequence.
-///
-fn long_return<'ctx, 'dep, D>(
-    context: &mut Context<'ctx, 'dep, D>,
-    function: Function<'ctx>,
-) -> anyhow::Result<()>
-where
-    D: Dependency,
-{
-    if context.function().name == Runtime::FUNCTION_SELECTOR
-        || context.function().name == Runtime::FUNCTION_CONSTRUCTOR
-    {
-        context.build_unconditional_branch(function.return_block);
-    } else {
-        let long_return_flag_pointer = context.access_memory(
-            context.field_const(
-                (compiler_common::ABI_MEMORY_OFFSET_LONG_RETURN * compiler_common::SIZE_FIELD)
-                    as u64,
-            ),
-            AddressSpace::Heap,
-            "long_return_flag_pointer",
-        );
-        context.build_store(long_return_flag_pointer, context.field_const(1));
-        context.build_unconditional_branch(function.throw_block);
-    }
-
-    Ok(())
 }
