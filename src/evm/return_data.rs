@@ -55,7 +55,7 @@ where
     );
     let parent_offset = context.build_load(parent_offset_pointer, "return_data_copy_parent_offset");
     let source_offset = context.builder().build_int_add(
-        arguments[0].into_int_value(),
+        arguments[1].into_int_value(),
         parent_offset.into_int_value(),
         "return_data_copy_source_offset",
     );
