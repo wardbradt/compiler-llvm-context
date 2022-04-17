@@ -18,6 +18,7 @@ use crate::Dependency;
 pub fn call<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
     function: inkwell::values::FunctionValue<'ctx>,
+    gas: inkwell::values::IntValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
     value: Option<inkwell::values::IntValue<'ctx>>,
     input_offset: inkwell::values::IntValue<'ctx>,
@@ -75,11 +76,11 @@ where
     context.build_call(
         context.get_intrinsic_function(IntrinsicFunction::ToL1),
         &[
+            gas.as_basic_value_enum(),
             value
                 .unwrap_or_else(|| context.field_const(0))
                 .as_basic_value_enum(),
             input_offset.as_basic_value_enum(),
-            input_size.as_basic_value_enum(),
         ],
         "contract_call_simulation_tol1",
     );
@@ -89,9 +90,7 @@ where
     context.build_call(
         context.get_intrinsic_function(IntrinsicFunction::Precompile),
         &[
-            value
-                .unwrap_or_else(|| context.field_const(0))
-                .as_basic_value_enum(),
+            gas.as_basic_value_enum(),
             input_offset.as_basic_value_enum(),
         ],
         "contract_call_simulation_precompile",
