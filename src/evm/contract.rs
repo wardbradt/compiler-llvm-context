@@ -28,31 +28,90 @@ pub fn call<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    if let Some(value) = value {
-        crate::evm::check_value_zero(context, value);
-    }
-
     let identity_block = context.append_basic_block("contract_call_identity_block");
+    let tol1_block = context.append_basic_block("contract_call_tol1_block");
+    let precompile_block = context.append_basic_block("contract_call_precompile_block");
+    let code_address_block = context.append_basic_block("contract_call_code_address_block");
+    let meta_block = context.append_basic_block("contract_call_meta_block");
     let ordinary_block = context.append_basic_block("contract_call_ordinary_block");
     let join_block = context.append_basic_block("contract_call_join_block");
 
     let result_pointer = context.build_alloca(context.field_type(), "contract_call_result_pointer");
     context.build_store(result_pointer, context.field_const(0));
 
-    let is_address_identity = context.builder().build_int_compare(
-        inkwell::IntPredicate::EQ,
+    context.builder().build_switch(
         address,
-        context.field_const_str(compiler_common::ABI_ADDRESS_IDENTITY),
-        "contract_call_is_address_identity",
+        ordinary_block,
+        &[
+            (
+                context.field_const_str(compiler_common::ABI_ADDRESS_IDENTITY),
+                identity_block,
+            ),
+            (
+                context.field_const_str(compiler_common::ABI_ADDRESS_TO_L1),
+                tol1_block,
+            ),
+            (
+                context.field_const_str(compiler_common::ABI_ADDRESS_PRECOMPILE),
+                precompile_block,
+            ),
+            (
+                context.field_const_str(compiler_common::ABI_ADDRESS_CODE_ADDRESS),
+                code_address_block,
+            ),
+            (
+                context.field_const_str(compiler_common::ABI_ADDRESS_META),
+                meta_block,
+            ),
+        ],
     );
-    context.build_conditional_branch(is_address_identity, identity_block, ordinary_block);
 
     context.set_basic_block(identity_block);
     let result = call_identity(context, output_offset, input_offset, output_size)?;
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
 
+    context.set_basic_block(tol1_block);
+    context.build_call(
+        context.get_intrinsic_function(IntrinsicFunction::ToL1),
+        &[
+            value
+                .unwrap_or_else(|| context.field_const(0))
+                .as_basic_value_enum(),
+            input_offset.as_basic_value_enum(),
+            input_size.as_basic_value_enum(),
+        ],
+        "contract_call_simulation_tol1",
+    );
+    context.build_unconditional_branch(join_block);
+
+    context.set_basic_block(precompile_block);
+    context.build_call(
+        context.get_intrinsic_function(IntrinsicFunction::Precompile),
+        &[
+            value
+                .unwrap_or_else(|| context.field_const(0))
+                .as_basic_value_enum(),
+            input_offset.as_basic_value_enum(),
+        ],
+        "contract_call_simulation_precompile",
+    );
+    context.build_unconditional_branch(join_block);
+
+    context.set_basic_block(code_address_block);
+    let result = context.access_context(compiler_common::ContextValue::CodeAddress)?;
+    context.build_store(result_pointer, result);
+    context.build_unconditional_branch(join_block);
+
+    context.set_basic_block(meta_block);
+    let result = context.access_context(compiler_common::ContextValue::Meta)?;
+    context.build_store(result_pointer, result);
+    context.build_unconditional_branch(join_block);
+
     context.set_basic_block(ordinary_block);
+    if let Some(value) = value {
+        crate::evm::check_value_zero(context, value);
+    }
     let result = call_ordinary(
         context,
         function,
