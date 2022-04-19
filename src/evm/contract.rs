@@ -76,25 +76,28 @@ where
     context.build_call(
         context.get_intrinsic_function(IntrinsicFunction::ToL1),
         &[
-            gas.as_basic_value_enum(),
             value
                 .unwrap_or_else(|| context.field_const(0))
                 .as_basic_value_enum(),
             input_offset.as_basic_value_enum(),
+            gas.as_basic_value_enum(),
         ],
         "contract_call_simulation_tol1",
     );
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(precompile_block);
-    context.build_call(
-        context.get_intrinsic_function(IntrinsicFunction::Precompile),
-        &[
-            gas.as_basic_value_enum(),
-            input_offset.as_basic_value_enum(),
-        ],
-        "contract_call_simulation_precompile",
-    );
+    let result = context
+        .build_call(
+            context.get_intrinsic_function(IntrinsicFunction::Precompile),
+            &[
+                gas.as_basic_value_enum(),
+                input_offset.as_basic_value_enum(),
+            ],
+            "contract_call_simulation_precompile",
+        )
+        .expect("Always exists");
+    context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(code_address_block);
