@@ -108,7 +108,7 @@ where
                 .unwrap_or_else(|| context.field_const(0))
                 .as_basic_value_enum(),
             input_offset.as_basic_value_enum(),
-            gas.as_basic_value_enum(),
+            context.field_const(1).as_basic_value_enum(), // TODO: generate CFG
         ],
         "contract_call_simulation_tol1",
     );
