@@ -13,14 +13,25 @@ use crate::Dependency;
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Intrinsic {
-    /// The contract context getter.
-    Context,
     /// The event emitting.
     Event,
     /// The L1 interactor.
     ToL1,
     /// The precompile call.
     Precompile,
+
+    /// The current contract's address.
+    Address,
+    /// The caller's address.
+    Caller,
+    /// The address where the current contract's code is deployed.
+    CodeSource,
+    /// The other data, including the block information and VM state.
+    Meta,
+    /// The transaction origin.
+    TxOrigin,
+    /// The remaining amount of ergs.
+    ErgsLeft,
 
     /// The long return.
     Return,
@@ -41,10 +52,16 @@ impl Intrinsic {
     ///
     pub fn name(&self) -> &'static str {
         match self {
-            Intrinsic::Context => "llvm.syncvm.context",
             Intrinsic::Event => "llvm.syncvm.event",
             Intrinsic::ToL1 => "llvm.syncvm.tol1",
             Intrinsic::Precompile => "llvm.syncvm.precompile",
+
+            Intrinsic::Address => "llvm.syncvm.this",
+            Intrinsic::Caller => "llvm.syncvm.caller",
+            Intrinsic::CodeSource => "llvm.syncvm.codesource",
+            Intrinsic::Meta => "llvm.syncvm.meta",
+            Intrinsic::TxOrigin => "llvm.syncvm.txorigin",
+            Intrinsic::ErgsLeft => "llvm.syncvm.ergsleft",
 
             Intrinsic::Return => "llvm.syncvm.return",
             Intrinsic::Revert => "llvm.syncvm.revert",

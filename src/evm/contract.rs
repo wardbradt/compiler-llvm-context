@@ -29,13 +29,19 @@ pub fn call<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
+    let ecrecover_block = context.append_basic_block("contract_call_ecrecover_block");
+    let sha256_block = context.append_basic_block("contract_call_sha256_block");
     let identity_block = context.append_basic_block("contract_call_identity_block");
     let tol1_block = context.append_basic_block("contract_call_tol1_block");
     let precompile_block = context.append_basic_block("contract_call_precompile_block");
-    let code_address_block = context.append_basic_block("contract_call_code_address_block");
+    let code_source_block = context.append_basic_block("contract_call_code_source_block");
     let meta_block = context.append_basic_block("contract_call_meta_block");
     let ordinary_block = context.append_basic_block("contract_call_ordinary_block");
     let join_block = context.append_basic_block("contract_call_join_block");
+
+    let address_pointer =
+        context.build_alloca(context.field_type(), "contract_call_address_pointer");
+    context.build_store(address_pointer, address);
 
     let result_pointer = context.build_alloca(context.field_type(), "contract_call_result_pointer");
     context.build_store(result_pointer, context.field_const(0));
@@ -45,7 +51,15 @@ where
         ordinary_block,
         &[
             (
-                context.field_const_str(compiler_common::ABI_ADDRESS_IDENTITY),
+                context.field_const_str(compiler_common::SOLIDITY_ADDRESS_ECRECOVER),
+                ecrecover_block,
+            ),
+            (
+                context.field_const_str(compiler_common::SOLIDITY_ADDRESS_SHA256),
+                sha256_block,
+            ),
+            (
+                context.field_const_str(compiler_common::SOLIDITY_ADDRESS_IDENTITY),
                 identity_block,
             ),
             (
@@ -58,7 +72,7 @@ where
             ),
             (
                 context.field_const_str(compiler_common::ABI_ADDRESS_CODE_ADDRESS),
-                code_address_block,
+                code_source_block,
             ),
             (
                 context.field_const_str(compiler_common::ABI_ADDRESS_META),
@@ -66,6 +80,20 @@ where
             ),
         ],
     );
+
+    context.set_basic_block(ecrecover_block);
+    context.build_store(
+        address_pointer,
+        context.field_const_str(compiler_common::ABI_ADDRESS_ECRECOVER),
+    );
+    context.build_unconditional_branch(ordinary_block);
+
+    context.set_basic_block(sha256_block);
+    context.build_store(
+        address_pointer,
+        context.field_const_str(compiler_common::ABI_ADDRESS_SHA256),
+    );
+    context.build_unconditional_branch(ordinary_block);
 
     context.set_basic_block(identity_block);
     let result = call_identity(context, output_offset, input_offset, output_size)?;
@@ -100,13 +128,25 @@ where
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
 
-    context.set_basic_block(code_address_block);
-    let result = context.access_context(compiler_common::ContextValue::CodeAddress)?;
+    context.set_basic_block(code_source_block);
+    let result = context
+        .build_call(
+            context.get_intrinsic_function(IntrinsicFunction::CodeSource),
+            &[],
+            "contract_call_simulation_code_source",
+        )
+        .expect("Always exists");
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(meta_block);
-    let result = context.access_context(compiler_common::ContextValue::Meta)?;
+    let result = context
+        .build_call(
+            context.get_intrinsic_function(IntrinsicFunction::Meta),
+            &[],
+            "contract_call_simulation_meta",
+        )
+        .expect("Always exists");
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
 
@@ -114,6 +154,9 @@ where
     if let Some(value) = value {
         crate::evm::check_value_zero(context, value);
     }
+    let address = context
+        .build_load(address_pointer, "contract_call_address_updated")
+        .into_int_value();
     let result = call_ordinary(
         context,
         function,

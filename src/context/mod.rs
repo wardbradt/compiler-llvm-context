@@ -931,24 +931,6 @@ where
     }
 
     ///
-    /// Returns a contract context value.
-    ///
-    pub fn access_context(
-        &self,
-        context_value: compiler_common::ContextValue,
-    ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
-        let intrinsic = self.get_intrinsic_function(IntrinsicFunction::Context);
-        let value = self
-            .build_call(
-                intrinsic,
-                &[self.field_const(context_value.into()).as_basic_value_enum()],
-                "context_get_call",
-            )
-            .expect("Contract context always returns a value");
-        Ok(value)
-    }
-
-    ///
     /// Returns the EVM data reference.
     ///
     /// # Panics

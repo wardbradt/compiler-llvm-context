@@ -131,7 +131,7 @@ where
     D: Dependency,
 {
     let call_definition = context.builder().build_left_shift(
-        context.field_const_str(compiler_common::ABI_ADDRESS_CREATE),
+        context.field_const_str(compiler_common::ABI_ADDRESS_KNOWN_CODE_FACTORY),
         context.field_const((compiler_common::BITLENGTH_X32) as u64),
         "",
     );
