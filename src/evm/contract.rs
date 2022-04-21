@@ -32,7 +32,7 @@ where
     let ecrecover_block = context.append_basic_block("contract_call_ecrecover_block");
     let sha256_block = context.append_basic_block("contract_call_sha256_block");
     let identity_block = context.append_basic_block("contract_call_identity_block");
-    let tol1_block = context.append_basic_block("contract_call_tol1_block");
+    let tol1_block = context.append_basic_block("contract_call_toL1_block");
     let precompile_block = context.append_basic_block("contract_call_precompile_block");
     let code_source_block = context.append_basic_block("contract_call_code_source_block");
     let meta_block = context.append_basic_block("contract_call_meta_block");
@@ -81,74 +81,124 @@ where
         ],
     );
 
-    context.set_basic_block(ecrecover_block);
-    context.build_store(
-        address_pointer,
-        context.field_const_str(compiler_common::ABI_ADDRESS_ECRECOVER),
-    );
-    context.build_unconditional_branch(ordinary_block);
+    {
+        context.set_basic_block(ecrecover_block);
+        context.build_store(
+            address_pointer,
+            context.field_const_str(compiler_common::ABI_ADDRESS_ECRECOVER),
+        );
+        context.build_unconditional_branch(ordinary_block);
+    }
 
-    context.set_basic_block(sha256_block);
-    context.build_store(
-        address_pointer,
-        context.field_const_str(compiler_common::ABI_ADDRESS_SHA256),
-    );
-    context.build_unconditional_branch(ordinary_block);
+    {
+        context.set_basic_block(sha256_block);
+        context.build_store(
+            address_pointer,
+            context.field_const_str(compiler_common::ABI_ADDRESS_SHA256),
+        );
+        context.build_unconditional_branch(ordinary_block);
+    }
 
-    context.set_basic_block(identity_block);
-    let result = call_identity(context, output_offset, input_offset, output_size)?;
-    context.build_store(result_pointer, result);
-    context.build_unconditional_branch(join_block);
+    {
+        context.set_basic_block(identity_block);
+        let result = call_identity(context, output_offset, input_offset, output_size)?;
+        context.build_store(result_pointer, result);
+        context.build_unconditional_branch(join_block);
+    }
 
-    context.set_basic_block(tol1_block);
-    context.build_call(
-        context.get_intrinsic_function(IntrinsicFunction::ToL1),
-        &[
-            value
-                .unwrap_or_else(|| context.field_const(0))
-                .as_basic_value_enum(),
-            input_offset.as_basic_value_enum(),
-            context.field_const(1).as_basic_value_enum(), // TODO: generate CFG
-        ],
-        "contract_call_simulation_tol1",
-    );
-    context.build_unconditional_branch(join_block);
+    {
+        context.set_basic_block(tol1_block);
+        let in_0 = value.unwrap_or_else(|| context.field_const(0));
+        let in_1 = input_offset;
 
-    context.set_basic_block(precompile_block);
-    let result = context
-        .build_call(
-            context.get_intrinsic_function(IntrinsicFunction::Precompile),
-            &[
-                gas.as_basic_value_enum(),
-                input_offset.as_basic_value_enum(),
-            ],
-            "contract_call_simulation_precompile",
-        )
-        .expect("Always exists");
-    context.build_store(result_pointer, result);
-    context.build_unconditional_branch(join_block);
+        let contract_call_tol1_is_first_block =
+            context.append_basic_block("contract_call_toL1_is_first_block");
+        let contract_call_tol1_is_not_first_block =
+            context.append_basic_block("contract_call_toL1_is_not_first_block");
 
-    context.set_basic_block(code_source_block);
-    let result = context
-        .build_call(
-            context.get_intrinsic_function(IntrinsicFunction::CodeSource),
-            &[],
-            "contract_call_simulation_code_source",
-        )
-        .expect("Always exists");
-    context.build_store(result_pointer, result);
-    context.build_unconditional_branch(join_block);
+        let is_first_equals_zero = context.builder().build_int_compare(
+            inkwell::IntPredicate::EQ,
+            gas,
+            context.field_const(0),
+            "contract_call_toL1_is_first_equals_zero",
+        );
+        context.build_conditional_branch(
+            is_first_equals_zero,
+            contract_call_tol1_is_not_first_block,
+            contract_call_tol1_is_first_block,
+        );
 
-    context.set_basic_block(meta_block);
-    let result = context
-        .build_call(
-            context.get_intrinsic_function(IntrinsicFunction::Meta),
-            &[],
-            "contract_call_simulation_meta",
-        )
-        .expect("Always exists");
-    context.build_store(result_pointer, result);
-    context.build_unconditional_branch(join_block);
+        {
+            context.set_basic_block(contract_call_tol1_is_not_first_block);
+            let is_first = context.field_const(0);
+            context.build_call(
+                context.get_intrinsic_function(IntrinsicFunction::ToL1),
+                &[
+                    in_0.as_basic_value_enum(),
+                    in_1.as_basic_value_enum(),
+                    is_first.as_basic_value_enum(),
+                ],
+                "contract_call_simulation_tol1",
+            );
+            context.build_unconditional_branch(join_block);
+        }
+
+        {
+            context.set_basic_block(contract_call_tol1_is_first_block);
+            let is_first = context.field_const(1);
+            context.build_call(
+                context.get_intrinsic_function(IntrinsicFunction::ToL1),
+                &[
+                    in_0.as_basic_value_enum(),
+                    in_1.as_basic_value_enum(),
+                    is_first.as_basic_value_enum(),
+                ],
+                "contract_call_simulation_tol1",
+            );
+            context.build_unconditional_branch(join_block);
+        }
+    }
+
+    {
+        context.set_basic_block(precompile_block);
+        let in_0 = gas;
+        let ergs_left = input_offset;
+        let result = context
+            .build_call(
+                context.get_intrinsic_function(IntrinsicFunction::Precompile),
+                &[in_0.as_basic_value_enum(), ergs_left.as_basic_value_enum()],
+                "contract_call_simulation_precompile",
+            )
+            .expect("Always exists");
+        context.build_store(result_pointer, result);
+        context.build_unconditional_branch(join_block);
+    }
+
+    {
+        context.set_basic_block(code_source_block);
+        let result = context
+            .build_call(
+                context.get_intrinsic_function(IntrinsicFunction::CodeSource),
+                &[],
+                "contract_call_simulation_code_source",
+            )
+            .expect("Always exists");
+        context.build_store(result_pointer, result);
+        context.build_unconditional_branch(join_block);
+    }
+
+    {
+        context.set_basic_block(meta_block);
+        let result = context
+            .build_call(
+                context.get_intrinsic_function(IntrinsicFunction::Meta),
+                &[],
+                "contract_call_simulation_meta",
+            )
+            .expect("Always exists");
+        context.build_store(result_pointer, result);
+        context.build_unconditional_branch(join_block);
+    }
 
     context.set_basic_block(ordinary_block);
     if let Some(value) = value {
