@@ -238,8 +238,8 @@ where
         .build_invoke(
             function,
             &[
-                abi_data.as_basic_value_enum(),
                 address.as_basic_value_enum(),
+                abi_data.as_basic_value_enum(),
                 result_pointer.as_basic_value_enum(),
             ],
             "contract_call_external",
