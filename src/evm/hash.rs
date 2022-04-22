@@ -49,8 +49,8 @@ where
         .build_call(
             context.runtime.static_call,
             &[
-                abi_data.as_basic_value_enum(),
                 address.as_basic_value_enum(),
+                abi_data.as_basic_value_enum(),
                 result_pointer.as_basic_value_enum(),
             ],
             "keccak256_call_external",
