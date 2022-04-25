@@ -358,6 +358,8 @@ where
         "contract_call_memcpy_from_child",
     );
 
+    context.write_abi_data(child_data_offset, output_size, AddressSpace::Child);
+
     Ok(result_status_code.as_basic_value_enum())
 }
 

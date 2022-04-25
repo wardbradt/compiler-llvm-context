@@ -5,6 +5,7 @@
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
+use crate::context::address_space::AddressSpace;
 use crate::context::function::runtime::Runtime;
 use crate::context::Context;
 use crate::Dependency;
@@ -77,7 +78,7 @@ where
             .get_nth_param(compiler_common::ABI_ENTRY_ARGUMENT_INDEX_CALLDATA_LENGTH as u32)
             .expect("Always exists")
             .into_int_value();
-        context.write_abi_data(calldata_offset, calldata_length);
+        context.write_abi_data(calldata_offset, calldata_length, AddressSpace::Parent);
         let is_constructor_call = context
             .function()
             .value
@@ -102,7 +103,9 @@ where
         context.build_catch_block();
 
         context.set_basic_block(context.function().return_block);
-        let return_value = context.read_abi_data().as_basic_value_enum();
+        let return_value = context
+            .read_abi_data(AddressSpace::Parent)
+            .as_basic_value_enum();
         context.build_return(Some(&return_value));
 
         Ok(())

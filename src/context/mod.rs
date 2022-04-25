@@ -758,12 +758,24 @@ where
     ///
     /// Reads the ABI data from the specified heap area.
     ///
-    pub fn read_abi_data(&self) -> inkwell::values::IntValue<'ctx> {
-        let data_offset_pointer = self.access_memory(
-            self.field_const(
-                (compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET * compiler_common::SIZE_FIELD)
-                    as u64,
+    pub fn read_abi_data(&self, address_space: AddressSpace) -> inkwell::values::IntValue<'ctx> {
+        let (offset_offset, length_offset) = match address_space {
+            AddressSpace::Parent => (
+                compiler_common::ABI_MEMORY_OFFSET_CALLDATA_OFFSET,
+                compiler_common::ABI_MEMORY_OFFSET_CALLDATA_LENGTH,
             ),
+            AddressSpace::Child => (
+                compiler_common::ABI_MEMORY_OFFSET_RETURN_DATA_OFFSET,
+                compiler_common::ABI_MEMORY_OFFSET_RETURN_DATA_LENGTH,
+            ),
+            address_space => panic!(
+                "Address space {:?} cannot be accesses via the ABI data",
+                address_space
+            ),
+        };
+
+        let data_offset_pointer = self.access_memory(
+            self.field_const((offset_offset * compiler_common::SIZE_FIELD) as u64),
             AddressSpace::Heap,
             "data_offset_pointer",
         );
@@ -772,10 +784,7 @@ where
             .into_int_value();
 
         let data_length_pointer = self.access_memory(
-            self.field_const(
-                (compiler_common::ABI_MEMORY_OFFSET_DATA_LENGTH * compiler_common::SIZE_FIELD)
-                    as u64,
-            ),
+            self.field_const((length_offset * compiler_common::SIZE_FIELD) as u64),
             AddressSpace::Heap,
             "data_length_pointer",
         );
@@ -799,22 +808,32 @@ where
         &self,
         data_offset: inkwell::values::IntValue<'ctx>,
         data_length: inkwell::values::IntValue<'ctx>,
+        address_space: AddressSpace,
     ) {
-        let data_offset_pointer = self.access_memory(
-            self.field_const(
-                (compiler_common::ABI_MEMORY_OFFSET_DATA_OFFSET * compiler_common::SIZE_FIELD)
-                    as u64,
+        let (offset_offset, length_offset) = match address_space {
+            AddressSpace::Parent => (
+                compiler_common::ABI_MEMORY_OFFSET_CALLDATA_OFFSET,
+                compiler_common::ABI_MEMORY_OFFSET_CALLDATA_LENGTH,
             ),
+            AddressSpace::Child => (
+                compiler_common::ABI_MEMORY_OFFSET_RETURN_DATA_OFFSET,
+                compiler_common::ABI_MEMORY_OFFSET_RETURN_DATA_LENGTH,
+            ),
+            address_space => panic!(
+                "Address space {:?} cannot be accesses via the ABI data",
+                address_space
+            ),
+        };
+
+        let data_offset_pointer = self.access_memory(
+            self.field_const((offset_offset * compiler_common::SIZE_FIELD) as u64),
             AddressSpace::Heap,
             "data_offset_pointer",
         );
         self.build_store(data_offset_pointer, data_offset);
 
         let data_length_pointer = self.access_memory(
-            self.field_const(
-                (compiler_common::ABI_MEMORY_OFFSET_DATA_LENGTH * compiler_common::SIZE_FIELD)
-                    as u64,
-            ),
+            self.field_const((length_offset * compiler_common::SIZE_FIELD) as u64),
             AddressSpace::Heap,
             "data_length_pointer",
         );
