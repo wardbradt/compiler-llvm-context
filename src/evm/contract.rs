@@ -295,34 +295,47 @@ where
             "contract_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
-    let result_abi_data_pointer = context
-        .builder()
-        .build_struct_gep(
+    let result_abi_data_pointer = unsafe {
+        context.builder().build_gep(
             result_pointer.into_pointer_value(),
-            0,
+            &[
+                context.field_const(0),
+                context
+                    .integer_type(compiler_common::BITLENGTH_X32)
+                    .const_zero(),
+            ],
             "contract_call_external_result_abi_data_pointer",
         )
-        .expect("Always valid");
+    };
     let result_abi_data = context.build_load(
         result_abi_data_pointer,
         "contract_call_external_result_abi_data",
     );
-    let result_status_code_pointer = context
-        .builder()
-        .build_struct_gep(
+    let result_status_code_pointer = unsafe {
+        context.builder().build_gep(
             result_pointer.into_pointer_value(),
-            0,
+            &[
+                context.field_const(0),
+                context
+                    .integer_type(compiler_common::BITLENGTH_X32)
+                    .const_int(1, false),
+            ],
             "contract_call_external_result_status_code_pointer",
         )
-        .expect("Always valid");
-    let result_status_code = context.build_load(
+    };
+    let result_status_code_boolean = context.build_load(
         result_status_code_pointer,
+        "contract_call_external_result_status_code_boolean",
+    );
+    let result_status_code = context.builder().build_int_z_extend_or_bit_cast(
+        result_status_code_boolean.into_int_value(),
+        context.field_type(),
         "contract_call_external_result_status_code",
     );
 
     let child_data_offset = context.builder().build_and(
         result_abi_data.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        context.field_const(u32::MAX as u64),
         "contract_call_child_data_offset",
     );
     let source = context.access_memory(
@@ -345,7 +358,7 @@ where
         "contract_call_memcpy_from_child",
     );
 
-    Ok(result_status_code)
+    Ok(result_status_code.as_basic_value_enum())
 }
 
 ///
