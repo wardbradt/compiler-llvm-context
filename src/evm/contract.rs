@@ -338,6 +338,17 @@ where
         context.field_const(u32::MAX as u64),
         "contract_call_child_data_offset",
     );
+    let child_data_length_shifted = context.builder().build_right_shift(
+        result_abi_data.into_int_value(),
+        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        false,
+        "contract_call_child_data_length_shifted",
+    );
+    let child_data_length = context.builder().build_and(
+        child_data_length_shifted,
+        context.field_const(u32::MAX as u64),
+        "contract_call_child_data_length",
+    );
     let source = context.access_memory(
         child_data_offset,
         AddressSpace::Child,
@@ -358,7 +369,7 @@ where
         "contract_call_memcpy_from_child",
     );
 
-    context.write_abi_data(child_data_offset, output_size, AddressSpace::Child);
+    context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
 
     Ok(result_status_code.as_basic_value_enum())
 }
