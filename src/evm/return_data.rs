@@ -47,18 +47,18 @@ where
         "return_data_copy_destination_pointer",
     );
 
-    let parent_offset_pointer = context.access_memory(
+    let child_offset_pointer = context.access_memory(
         context.field_const(
             (compiler_common::ABI_MEMORY_OFFSET_RETURN_DATA_OFFSET * compiler_common::SIZE_FIELD)
                 as u64,
         ),
         AddressSpace::Heap,
-        "return_data_copy_parent_offset_pointer",
+        "return_data_copy_child_offset_pointer",
     );
-    let parent_offset = context.build_load(parent_offset_pointer, "return_data_copy_parent_offset");
+    let child_offset = context.build_load(child_offset_pointer, "return_data_copy_child_offset");
     let source_offset = context.builder().build_int_add(
         arguments[1].into_int_value(),
-        parent_offset.into_int_value(),
+        child_offset.into_int_value(),
         "return_data_copy_source_offset",
     );
     let source = context.access_memory(
