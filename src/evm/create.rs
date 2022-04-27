@@ -130,11 +130,8 @@ fn call_precompile<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let call_definition = context.builder().build_left_shift(
-        context.field_const_str(compiler_common::ABI_ADDRESS_KNOWN_CODE_FACTORY),
-        context.field_const((compiler_common::BITLENGTH_X32) as u64),
-        "",
-    );
+    let call_definition =
+        context.field_const_str_hex(compiler_common::ABI_ADDRESS_KNOWN_CODE_FACTORY);
     let result = context
         .build_invoke(
             context.runtime.far_call,
@@ -151,7 +148,7 @@ where
 
     let child_offset = context.builder().build_and(
         result.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        context.field_const(compiler_common::BITLENGTH_X64 as u64),
         "create_precompile_child_offset",
     );
     let child_pointer = context.access_memory(

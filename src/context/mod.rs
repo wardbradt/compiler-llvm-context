@@ -699,7 +699,7 @@ where
     ) {
         let length_shifted = self.builder.build_left_shift(
             length,
-            self.field_const(compiler_common::BITLENGTH_X32 as u64),
+            self.field_const(compiler_common::BITLENGTH_X64 as u64),
             "contract_exit_length_shifted",
         );
         let abi_data = self
@@ -719,8 +719,8 @@ where
     ///
     pub fn build_exit_with_message(&self, return_function: IntrinsicFunction, message: &str) {
         let length_shifted = self.builder.build_left_shift(
-            self.field_const(compiler_common::SIZE_X32 as u64),
-            self.field_const(compiler_common::BITLENGTH_X32 as u64),
+            self.field_const(compiler_common::SIZE_X64 as u64),
+            self.field_const(compiler_common::BITLENGTH_X64 as u64),
             "contract_exit_with_message_length_shifted",
         );
         let abi_data = self.builder.build_int_add(
@@ -793,7 +793,7 @@ where
             .into_int_value();
         let data_length_shifted = self.builder.build_left_shift(
             data_length,
-            self.field_const(compiler_common::BITLENGTH_X32 as u64),
+            self.field_const(compiler_common::BITLENGTH_X64 as u64),
             "data_length_shifted",
         );
 

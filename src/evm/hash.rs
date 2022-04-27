@@ -22,7 +22,7 @@ where
 {
     let input_size_shifted = context.builder().build_left_shift(
         input_size,
-        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        context.field_const(compiler_common::BITLENGTH_X64 as u64),
         "keccak256_call_input_size_shifted",
     );
     let abi_data = context.builder().build_int_add(
@@ -71,7 +71,7 @@ where
 
     let child_offset = context.builder().build_and(
         result_abi_data.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        context.field_const(compiler_common::BITLENGTH_X64 as u64),
         "keccak256_child_offset",
     );
     let child_pointer =
