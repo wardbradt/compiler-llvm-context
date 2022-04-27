@@ -19,13 +19,32 @@ use crate::WriteLLVM;
 #[derive(Debug, Default)]
 pub struct Entry {}
 
+impl Entry {
+    /// The calldata offset argument index.
+    pub const ARGUMENT_INDEX_CALLDATA_OFFSET: usize = 0;
+
+    /// The calldata length argument index.
+    pub const ARGUMENT_INDEX_CALLDATA_LENGTH: usize = 1;
+
+    /// The constructor call flag argument index.
+    pub const ARGUMENT_INDEX_IS_CONSTRUCTOR_CALL: usize = 2;
+}
+
 impl<D> WriteLLVM<D> for Entry
 where
     D: Dependency,
 {
     fn declare(&mut self, context: &mut Context<D>) -> anyhow::Result<()> {
-        let function_type =
-            context.function_type(1, vec![context.field_type().as_basic_type_enum()]);
+        let function_type = context.function_type(
+            1,
+            vec![
+                context.field_type().as_basic_type_enum(),
+                context.field_type().as_basic_type_enum(),
+                context
+                    .integer_type(compiler_common::BITLENGTH_BOOLEAN)
+                    .as_basic_type_enum(),
+            ],
+        );
         context.add_function(
             Runtime::FUNCTION_ENTRY,
             function_type,
@@ -58,39 +77,30 @@ where
             .ok_or_else(|| anyhow::anyhow!("Contract selector not found"))?;
 
         context.set_basic_block(context.function().entry_block);
-        let abi_data = context
+        let calldata_offset = context
             .function()
             .value
-            .get_first_param()
+            .get_nth_param(Self::ARGUMENT_INDEX_CALLDATA_OFFSET as u32)
             .expect("Always exists")
             .into_int_value();
-        let calldata_offset =
-            context
-                .builder()
-                .build_and(abi_data, context.field_const(u64::MAX), "calldata_offset");
-        let calldata_length_shifted = context.builder().build_right_shift(
-            abi_data,
-            context.field_const(compiler_common::BITLENGTH_X64 as u64),
-            false,
-            "calldata_length_shifted",
+        let calldata_offset = context.builder().build_and(
+            calldata_offset,
+            context.field_const(((1 << 24) - 1) as u64),
+            "calldata_offset_masked",
         );
-        let calldata_length = context.builder().build_and(
-            calldata_length_shifted,
-            context.field_const(u64::MAX),
-            "calldata_length",
-        );
+        let calldata_length = context
+            .function()
+            .value
+            .get_nth_param(Self::ARGUMENT_INDEX_CALLDATA_LENGTH as u32)
+            .expect("Always exists")
+            .into_int_value();
         context.write_abi_data(calldata_offset, calldata_length, AddressSpace::Parent);
-        let is_constructor_call = context.builder().build_right_shift(
-            abi_data,
-            context.field_const((compiler_common::BITLENGTH_X64 * 3) as u64),
-            false,
-            "is_constructor_call",
-        );
-        let is_constructor_call = context.builder().build_int_cast(
-            is_constructor_call,
-            context.integer_type(compiler_common::BITLENGTH_BOOLEAN),
-            "is_constructor_call_boolean",
-        );
+        let is_constructor_call = context
+            .function()
+            .value
+            .get_nth_param(Self::ARGUMENT_INDEX_IS_CONSTRUCTOR_CALL as u32)
+            .expect("Always exists")
+            .into_int_value();
         context.build_conditional_branch(
             is_constructor_call,
             constructor_call_block,
