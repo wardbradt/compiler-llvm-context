@@ -113,7 +113,8 @@ where
 
     {
         context.set_basic_block(tol1_block);
-        let in_0 = value.unwrap_or_else(|| context.field_const(0));
+        let in_0 = value
+            .ok_or_else(|| anyhow::anyhow!("The ToL1 function is called without value/in_0"))?;
         let in_1 = input_offset;
 
         let contract_call_tol1_is_first_block =
@@ -208,16 +209,18 @@ where
     {
         context.set_basic_block(mimic_call_block);
         let address = gas;
-        let mimic = value;
-        let result = call_default(
+        let mimic = value.ok_or_else(|| {
+            anyhow::anyhow!("The mimic call function is called without value/mimic")
+        })?;
+        let abi_data = input_offset;
+        let result = call_mimic(
             context,
-            context.runtime.far_call,
+            context.runtime.mimic_call,
             address,
-            input_offset,
-            input_size,
+            mimic,
+            abi_data,
             output_offset,
             output_size,
-            mimic,
         )?;
         context.build_store(result_pointer, result);
         context.build_unconditional_branch(join_block);
@@ -238,7 +241,6 @@ where
         input_size,
         output_offset,
         output_size,
-        None,
     )?;
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
@@ -274,7 +276,6 @@ where
 ///
 /// Generates a default contract call.
 ///
-#[allow(clippy::too_many_arguments)]
 fn call_default<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
     function: inkwell::values::FunctionValue<'ctx>,
@@ -283,7 +284,6 @@ fn call_default<'ctx, 'dep, D>(
     input_size: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_size: inkwell::values::IntValue<'ctx>,
-    mimic: Option<inkwell::values::IntValue<'ctx>>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -310,15 +310,16 @@ where
         .as_basic_type_enum();
     let result_pointer = context.build_alloca(result_type, "contract_call_result_pointer");
 
-    let mut arguments = Vec::with_capacity(4);
-    arguments.push(address.as_basic_value_enum());
-    arguments.push(abi_data.as_basic_value_enum());
-    if let Some(mimic) = mimic {
-        arguments.push(mimic.as_basic_value_enum());
-    }
-    arguments.push(result_pointer.as_basic_value_enum());
     let result_pointer = context
-        .build_invoke(function, arguments.as_slice(), "contract_call_external")
+        .build_invoke(
+            function,
+            &[
+                address.as_basic_value_enum(),
+                abi_data.as_basic_value_enum(),
+                result_pointer.as_basic_value_enum(),
+            ],
+            "contract_call_external",
+        )
         .expect("IntrinsicFunction always returns a flag");
     let result_abi_data_pointer = unsafe {
         context.builder().build_gep(
@@ -392,6 +393,117 @@ where
         source,
         output_size,
         "contract_call_memcpy_from_child",
+    );
+
+    context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
+
+    Ok(result_status_code.as_basic_value_enum())
+}
+
+///
+/// Generates a mimic call.
+///
+fn call_mimic<'ctx, 'dep, D>(
+    context: &mut Context<'ctx, 'dep, D>,
+    function: inkwell::values::FunctionValue<'ctx>,
+    address: inkwell::values::IntValue<'ctx>,
+    mimic: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::IntValue<'ctx>,
+    output_offset: inkwell::values::IntValue<'ctx>,
+    output_size: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let result_type = context
+        .structure_type(vec![
+            context
+                .integer_type(compiler_common::BITLENGTH_FIELD)
+                .as_basic_type_enum(),
+            context
+                .integer_type(compiler_common::BITLENGTH_BOOLEAN)
+                .as_basic_type_enum(),
+        ])
+        .as_basic_type_enum();
+    let result_pointer = context.build_alloca(result_type, "mimic_call_result_pointer");
+
+    let result_pointer = context
+        .build_invoke(
+            function,
+            &[
+                address.as_basic_value_enum(),
+                abi_data.as_basic_value_enum(),
+                mimic.as_basic_value_enum(),
+                result_pointer.as_basic_value_enum(),
+            ],
+            "mimic_call_external",
+        )
+        .expect("IntrinsicFunction always returns a flag");
+    let result_abi_data_pointer = unsafe {
+        context.builder().build_gep(
+            result_pointer.into_pointer_value(),
+            &[
+                context.field_const(0),
+                context
+                    .integer_type(compiler_common::BITLENGTH_X32)
+                    .const_zero(),
+            ],
+            "mimic_call_external_result_abi_data_pointer",
+        )
+    };
+    let result_abi_data = context.build_load(
+        result_abi_data_pointer,
+        "mimic_call_external_result_abi_data",
+    );
+    let result_status_code_pointer = unsafe {
+        context.builder().build_gep(
+            result_pointer.into_pointer_value(),
+            &[
+                context.field_const(0),
+                context
+                    .integer_type(compiler_common::BITLENGTH_X32)
+                    .const_int(1, false),
+            ],
+            "mimic_call_external_result_status_code_pointer",
+        )
+    };
+    let result_status_code_boolean = context.build_load(
+        result_status_code_pointer,
+        "mimic_call_external_result_status_code_boolean",
+    );
+    let result_status_code = context.builder().build_int_z_extend_or_bit_cast(
+        result_status_code_boolean.into_int_value(),
+        context.field_type(),
+        "mimic_call_external_result_status_code",
+    );
+
+    let child_data_offset = context.builder().build_and(
+        result_abi_data.into_int_value(),
+        context.field_const(u64::MAX as u64),
+        "mimic_call_child_data_offset",
+    );
+    let child_data_length_shifted = context.builder().build_right_shift(
+        result_abi_data.into_int_value(),
+        context.field_const(compiler_common::BITLENGTH_X64 as u64),
+        false,
+        "mimic_call_child_data_length_shifted",
+    );
+    let child_data_length = context.builder().build_and(
+        child_data_length_shifted,
+        context.field_const(u64::MAX as u64),
+        "mimic_call_child_data_length",
+    );
+    let source = context.access_memory(child_data_offset, AddressSpace::Child, "mimic_call_source");
+
+    let destination =
+        context.access_memory(output_offset, AddressSpace::Heap, "mimic_call_destination");
+
+    context.build_memcpy(
+        IntrinsicFunction::MemoryCopyFromChild,
+        destination,
+        source,
+        output_size,
+        "mimic_call_memcpy_from_child",
     );
 
     context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
