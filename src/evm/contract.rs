@@ -33,9 +33,10 @@ where
     let sha256_block = context.append_basic_block("contract_call_sha256_block");
     let identity_block = context.append_basic_block("contract_call_identity_block");
     let tol1_block = context.append_basic_block("contract_call_toL1_block");
-    let precompile_block = context.append_basic_block("contract_call_precompile_block");
     let code_source_block = context.append_basic_block("contract_call_code_source_block");
+    let precompile_block = context.append_basic_block("contract_call_precompile_block");
     let meta_block = context.append_basic_block("contract_call_meta_block");
+    let mimic_call_block = context.append_basic_block("contract_call_mimic_call_block");
     let ordinary_block = context.append_basic_block("contract_call_ordinary_block");
     let join_block = context.append_basic_block("contract_call_join_block");
 
@@ -67,16 +68,20 @@ where
                 tol1_block,
             ),
             (
-                context.field_const_str(compiler_common::ABI_ADDRESS_PRECOMPILE),
-                precompile_block,
-            ),
-            (
                 context.field_const_str(compiler_common::ABI_ADDRESS_CODE_ADDRESS),
                 code_source_block,
             ),
             (
+                context.field_const_str(compiler_common::ABI_ADDRESS_PRECOMPILE),
+                precompile_block,
+            ),
+            (
                 context.field_const_str(compiler_common::ABI_ADDRESS_META),
                 meta_block,
+            ),
+            (
+                context.field_const_str(compiler_common::ABI_ADDRESS_MIMIC_CALL),
+                mimic_call_block,
             ),
         ],
     );
@@ -160,6 +165,19 @@ where
     }
 
     {
+        context.set_basic_block(code_source_block);
+        let result = context
+            .build_call(
+                context.get_intrinsic_function(IntrinsicFunction::CodeSource),
+                &[],
+                "contract_call_simulation_code_source",
+            )
+            .expect("Always exists");
+        context.build_store(result_pointer, result);
+        context.build_unconditional_branch(join_block);
+    }
+
+    {
         context.set_basic_block(precompile_block);
         let in_0 = gas;
         let ergs_left = input_offset;
@@ -168,19 +186,6 @@ where
                 context.get_intrinsic_function(IntrinsicFunction::Precompile),
                 &[in_0.as_basic_value_enum(), ergs_left.as_basic_value_enum()],
                 "contract_call_simulation_precompile",
-            )
-            .expect("Always exists");
-        context.build_store(result_pointer, result);
-        context.build_unconditional_branch(join_block);
-    }
-
-    {
-        context.set_basic_block(code_source_block);
-        let result = context
-            .build_call(
-                context.get_intrinsic_function(IntrinsicFunction::CodeSource),
-                &[],
-                "contract_call_simulation_code_source",
             )
             .expect("Always exists");
         context.build_store(result_pointer, result);
@@ -200,6 +205,24 @@ where
         context.build_unconditional_branch(join_block);
     }
 
+    {
+        context.set_basic_block(mimic_call_block);
+        let address = gas;
+        let mimic = value;
+        let result = call_default(
+            context,
+            context.runtime.far_call,
+            address,
+            input_offset,
+            input_size,
+            output_offset,
+            output_size,
+            mimic,
+        )?;
+        context.build_store(result_pointer, result);
+        context.build_unconditional_branch(join_block);
+    }
+
     context.set_basic_block(ordinary_block);
     if let Some(value) = value {
         crate::evm::check_value_zero(context, value);
@@ -207,7 +230,7 @@ where
     let address = context
         .build_load(address_pointer, "contract_call_address_updated")
         .into_int_value();
-    let result = call_ordinary(
+    let result = call_default(
         context,
         function,
         address,
@@ -215,6 +238,7 @@ where
         input_size,
         output_offset,
         output_size,
+        None,
     )?;
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
@@ -248,9 +272,10 @@ where
 }
 
 ///
-/// Generates an ordinary contract call
+/// Generates a default contract call.
 ///
-fn call_ordinary<'ctx, 'dep, D>(
+#[allow(clippy::too_many_arguments)]
+fn call_default<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
     function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
@@ -258,6 +283,7 @@ fn call_ordinary<'ctx, 'dep, D>(
     input_size: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_size: inkwell::values::IntValue<'ctx>,
+    mimic: Option<inkwell::values::IntValue<'ctx>>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -284,16 +310,15 @@ where
         .as_basic_type_enum();
     let result_pointer = context.build_alloca(result_type, "contract_call_result_pointer");
 
+    let mut arguments = Vec::with_capacity(4);
+    arguments.push(address.as_basic_value_enum());
+    arguments.push(abi_data.as_basic_value_enum());
+    if let Some(mimic) = mimic {
+        arguments.push(mimic.as_basic_value_enum());
+    }
+    arguments.push(result_pointer.as_basic_value_enum());
     let result_pointer = context
-        .build_invoke(
-            function,
-            &[
-                address.as_basic_value_enum(),
-                abi_data.as_basic_value_enum(),
-                result_pointer.as_basic_value_enum(),
-            ],
-            "contract_call_external",
-        )
+        .build_invoke(function, arguments.as_slice(), "contract_call_external")
         .expect("IntrinsicFunction always returns a flag");
     let result_abi_data_pointer = unsafe {
         context.builder().build_gep(
