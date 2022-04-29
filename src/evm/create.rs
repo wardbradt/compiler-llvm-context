@@ -2,6 +2,7 @@
 //! Translates the contract creation instructions.
 //!
 
+use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
 use crate::context::address_space::AddressSpace;
@@ -15,12 +16,12 @@ pub fn create<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
     value: inkwell::values::IntValue<'ctx>,
     input_offset: inkwell::values::IntValue<'ctx>,
-    input_size: inkwell::values::IntValue<'ctx>,
+    input_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
-    create2(context, value, input_offset, input_size, None)
+    create2(context, value, input_offset, input_length, None)
 }
 
 ///
@@ -30,7 +31,7 @@ pub fn create2<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
     value: inkwell::values::IntValue<'ctx>,
     input_offset: inkwell::values::IntValue<'ctx>,
-    input_size: inkwell::values::IntValue<'ctx>,
+    input_length: inkwell::values::IntValue<'ctx>,
     salt: Option<inkwell::values::IntValue<'ctx>>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
@@ -47,10 +48,10 @@ where
         context.field_const(compiler_common::SIZE_FIELD as u64),
         "create_input_offset",
     );
-    let constructor_input_size = context.builder().build_int_sub(
-        input_size,
+    let constructor_input_length = context.builder().build_int_sub(
+        input_length,
         context.field_const(compiler_common::SIZE_FIELD as u64),
-        "create_input_size",
+        "create_input_length",
     );
 
     let address = call_precompile(
@@ -58,7 +59,7 @@ where
         hash.into_int_value(),
         salt.unwrap_or_else(|| context.field_const(0)),
         constructor_input_offset,
-        constructor_input_size,
+        constructor_input_length,
     )?;
 
     Ok(Some(address.as_basic_value_enum()))
@@ -130,34 +131,59 @@ fn call_precompile<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let call_definition =
-        context.field_const_str_hex(compiler_common::ABI_ADDRESS_KNOWN_CODE_FACTORY);
-    let result = context
+    let address = context.field_const_str_hex(compiler_common::ABI_ADDRESS_KNOWN_CODE_FACTORY);
+
+    let input_length_shifted = context.builder().build_left_shift(
+        input_length,
+        context.field_const(compiler_common::BITLENGTH_X64 as u64),
+        "create_precompile_call_input_length_shifted",
+    );
+    let abi_data = context.builder().build_int_add(
+        input_length_shifted,
+        input_offset,
+        "create_precompile_call_abi_data",
+    );
+
+    let result_type = context
+        .structure_type(vec![
+            context
+                .integer_type(compiler_common::BITLENGTH_FIELD)
+                .as_basic_type_enum(),
+            context
+                .integer_type(compiler_common::BITLENGTH_BOOLEAN)
+                .as_basic_type_enum(),
+        ])
+        .as_basic_type_enum();
+    let result_pointer =
+        context.build_alloca(result_type, "contract_precompile_call_result_pointer");
+
+    let result_pointer = context
         .build_invoke(
             context.runtime.far_call,
             &[
-                call_definition.as_basic_value_enum(),
-                hash.as_basic_value_enum(),
-                salt.as_basic_value_enum(),
-                input_offset.as_basic_value_enum(),
-                input_length.as_basic_value_enum(),
+                address.as_basic_value_enum(),
+                abi_data.as_basic_value_enum(),
+                result_pointer.as_basic_value_enum(),
             ],
             "create_precompile_call_external",
         )
         .expect("Always returns a value");
-
-    let child_offset = context.builder().build_and(
-        result.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        "create_precompile_child_offset",
+    let result_address_pointer = unsafe {
+        context.builder().build_gep(
+            result_pointer.into_pointer_value(),
+            &[
+                context.field_const(0),
+                context
+                    .integer_type(compiler_common::BITLENGTH_X32)
+                    .const_zero(),
+            ],
+            "create_precompile_call_external_result_address_pointer",
+        )
+    };
+    let result_address = context.build_load(
+        result_address_pointer,
+        "create_precompile_call_external_result_address",
     );
-    let child_pointer = context.access_memory(
-        child_offset,
-        AddressSpace::Child,
-        "create_precompile_child_pointer",
-    );
 
-    let result = context.build_load(child_pointer, "create_precompile_result");
-
-    Ok(result)
+    Ok(result_address)
 }
