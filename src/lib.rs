@@ -39,11 +39,12 @@ pub use self::evm::r#return;
 pub use self::evm::return_data;
 pub use self::evm::storage;
 
-/// The LLVM target name.
-pub static TARGET_NAME: &str = "syncvm";
-
-/// The actual production VM name.
-pub static PRODUCTION_NAME: &str = "zkEVM";
+///
+/// Initializes the zkEVM target machine.
+///
+pub fn initialize_target() {
+    inkwell::targets::Target::initialize_syncvm(&inkwell::targets::InitializationConfig::default());
+}
 
 ///
 /// Implemented by items which are translated into LLVM IR.

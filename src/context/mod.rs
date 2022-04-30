@@ -79,21 +79,16 @@ where
     ///
     pub fn new(
         llvm: &'ctx inkwell::context::Context,
-        machine: &inkwell::targets::TargetMachine,
-        mut optimizer: Optimizer<'ctx>,
         module_name: &str,
+        mut optimizer: Optimizer<'ctx>,
         dependency_manager: Option<&'dep mut D>,
         dump_flags: Vec<DumpFlag>,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let module = llvm.create_module(module_name);
-        module.set_triple(&machine.get_triple());
-        module.set_data_layout(&machine.get_target_data().get_data_layout());
-
-        optimizer.set_module(&module);
-
+        optimizer.set_module(&module)?;
         let runtime = Runtime::new(llvm, &module);
 
-        Self {
+        Ok(Self {
             llvm,
             builder: llvm.create_builder(),
             optimizer,
@@ -109,7 +104,7 @@ where
             dump_flags,
 
             evm_data: None,
-        }
+        })
     }
 
     ///
@@ -117,23 +112,15 @@ where
     ///
     pub fn new_evm(
         llvm: &'ctx inkwell::context::Context,
-        machine: &inkwell::targets::TargetMachine,
-        optimizer: Optimizer<'ctx>,
         module_name: &str,
+        optimizer: Optimizer<'ctx>,
         dependency_manager: Option<&'dep mut D>,
         dump_flags: Vec<DumpFlag>,
         evm_data: EVMData<'ctx>,
-    ) -> Self {
-        let mut object = Self::new(
-            llvm,
-            machine,
-            optimizer,
-            module_name,
-            dependency_manager,
-            dump_flags,
-        );
+    ) -> anyhow::Result<Self> {
+        let mut object = Self::new(llvm, module_name, optimizer, dependency_manager, dump_flags)?;
         object.evm_data = Some(evm_data);
-        object
+        Ok(object)
     }
 
     ///
