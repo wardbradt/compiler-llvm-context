@@ -22,9 +22,9 @@ pub fn call<'ctx, 'dep, D>(
     address: inkwell::values::IntValue<'ctx>,
     value: Option<inkwell::values::IntValue<'ctx>>,
     input_offset: inkwell::values::IntValue<'ctx>,
-    input_size: inkwell::values::IntValue<'ctx>,
+    input_length: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
-    output_size: inkwell::values::IntValue<'ctx>,
+    output_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -106,15 +106,14 @@ where
 
     {
         context.set_basic_block(identity_block);
-        let result = call_identity(context, output_offset, input_offset, output_size)?;
+        let result = call_identity(context, output_offset, input_offset, output_length)?;
         context.build_store(result_pointer, result);
         context.build_unconditional_branch(join_block);
     }
 
     {
         context.set_basic_block(tol1_block);
-        let in_0 = value
-            .ok_or_else(|| anyhow::anyhow!("The ToL1 function is called without value/in_0"))?;
+        let in_0 = value.unwrap_or_else(|| context.field_const(0));
         let in_1 = input_offset;
 
         let contract_call_tol1_is_first_block =
@@ -209,9 +208,7 @@ where
     {
         context.set_basic_block(mimic_call_block);
         let address = gas;
-        let mimic = value.ok_or_else(|| {
-            anyhow::anyhow!("The mimic call function is called without value/mimic")
-        })?;
+        let mimic = value.unwrap_or_else(|| context.field_const(0));
         let abi_data = input_offset;
         let result = call_mimic(
             context,
@@ -220,7 +217,7 @@ where
             mimic,
             abi_data,
             output_offset,
-            output_size,
+            output_length,
         )?;
         context.build_store(result_pointer, result);
         context.build_unconditional_branch(join_block);
@@ -238,9 +235,9 @@ where
         function,
         address,
         input_offset,
-        input_size,
+        input_length,
         output_offset,
-        output_size,
+        output_length,
     )?;
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
@@ -281,22 +278,23 @@ fn call_default<'ctx, 'dep, D>(
     function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
     input_offset: inkwell::values::IntValue<'ctx>,
-    input_size: inkwell::values::IntValue<'ctx>,
+    input_length: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
-    output_size: inkwell::values::IntValue<'ctx>,
+    output_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
 {
-    let input_size_shifted = context.builder().build_left_shift(
-        input_size,
+    let input_length_shifted = context.builder().build_left_shift(
+        input_length,
         context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        "contract_call_input_size_shifted",
+        "contract_call_input_length_shifted",
     );
-    let abi_data =
-        context
-            .builder()
-            .build_int_add(input_size_shifted, input_offset, "contract_call_abi_data");
+    let abi_data = context.builder().build_int_add(
+        input_length_shifted,
+        input_offset,
+        "contract_call_abi_data",
+    );
 
     let result_type = context
         .structure_type(vec![
@@ -391,7 +389,7 @@ where
         IntrinsicFunction::MemoryCopyFromChild,
         destination,
         source,
-        output_size,
+        output_length,
         "contract_call_memcpy_from_child",
     );
 
@@ -410,7 +408,7 @@ fn call_mimic<'ctx, 'dep, D>(
     mimic: inkwell::values::IntValue<'ctx>,
     abi_data: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
-    output_size: inkwell::values::IntValue<'ctx>,
+    output_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -502,7 +500,7 @@ where
         IntrinsicFunction::MemoryCopyFromChild,
         destination,
         source,
-        output_size,
+        output_length,
         "mimic_call_memcpy_from_child",
     );
 

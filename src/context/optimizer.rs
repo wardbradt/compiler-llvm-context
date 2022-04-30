@@ -14,7 +14,7 @@ pub struct Optimizer<'ctx> {
     /// The back-end optimization level.
     level_back_end: inkwell::OptimizationLevel,
     /// Whether to run the inliner.
-    run_inliner: bool,
+    is_inliner_enabled: bool,
 
     /// The module optimization pass manager.
     pass_manager_module: Option<inkwell::passes::PassManager<inkwell::module::Module<'ctx>>>,
@@ -61,7 +61,7 @@ impl<'ctx> Optimizer<'ctx> {
             target_machine,
             level_middle_end,
             level_back_end,
-            run_inliner,
+            is_inliner_enabled: run_inliner,
             pass_manager_module: None,
             pass_manager_function: None,
         })
@@ -85,7 +85,7 @@ impl<'ctx> Optimizer<'ctx> {
         pass_manager_builder.populate_lto_pass_manager(
             &pass_manager_module,
             true,
-            self.run_inliner,
+            self.is_inliner_enabled,
         );
         pass_manager_builder.populate_module_pass_manager(&pass_manager_module);
 
@@ -108,6 +108,13 @@ impl<'ctx> Optimizer<'ctx> {
     ///
     pub fn level_back_end(&self) -> inkwell::OptimizationLevel {
         self.level_back_end
+    }
+
+    ///
+    /// Whether the inliner is enabled.
+    ///
+    pub fn is_inliner_enabled(&self) -> bool {
+        self.is_inliner_enabled
     }
 
     ///

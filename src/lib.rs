@@ -96,6 +96,7 @@ pub trait Dependency {
         parent_name: &str,
         optimization_level_middle: inkwell::OptimizationLevel,
         optimization_level_back: inkwell::OptimizationLevel,
+        run_inliner: bool,
         dump_flags: Vec<DumpFlag>,
     ) -> anyhow::Result<String>;
 

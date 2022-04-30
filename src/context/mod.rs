@@ -194,6 +194,7 @@ where
                     self.module.get_name().to_str().expect("Always valid"),
                     self.optimizer.level_middle_end(),
                     self.optimizer.level_back_end(),
+                    self.optimizer.is_inliner_enabled(),
                     self.dump_flags.clone(),
                 )
             })
