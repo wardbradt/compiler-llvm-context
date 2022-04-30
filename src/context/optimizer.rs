@@ -7,6 +7,8 @@
 ///
 #[derive(Debug)]
 pub struct Optimizer<'ctx> {
+    /// The LLVM target machine.
+    target_machine: inkwell::targets::TargetMachine,
     /// The middle-end optimization level.
     level_middle_end: inkwell::OptimizationLevel,
     /// The back-end optimization level.
@@ -35,20 +37,7 @@ impl<'ctx> Optimizer<'ctx> {
         level_middle_end: inkwell::OptimizationLevel,
         level_back_end: inkwell::OptimizationLevel,
         run_inliner: bool,
-    ) -> Self {
-        Self {
-            level_middle_end,
-            level_back_end,
-            run_inliner,
-            pass_manager_module: None,
-            pass_manager_function: None,
-        }
-    }
-
-    ///
-    /// Sets the module which is to be optimized.
-    ///
-    pub fn set_module(&mut self, module: &inkwell::module::Module<'ctx>) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Self> {
         let target_machine = inkwell::targets::Target::from_name(Self::VM_TARGET_NAME)
             .ok_or_else(|| {
                 anyhow::anyhow!("LLVM target machine `{}` not found", Self::VM_TARGET_NAME)
@@ -57,7 +46,7 @@ impl<'ctx> Optimizer<'ctx> {
                 &inkwell::targets::TargetTriple::create(Self::VM_TARGET_NAME),
                 "",
                 "",
-                self.level_back_end,
+                level_back_end,
                 inkwell::targets::RelocMode::Default,
                 inkwell::targets::CodeModel::Default,
             )
@@ -67,8 +56,23 @@ impl<'ctx> Optimizer<'ctx> {
                     Self::VM_TARGET_NAME
                 )
             })?;
-        module.set_triple(&target_machine.get_triple());
-        module.set_data_layout(&target_machine.get_target_data().get_data_layout());
+
+        Ok(Self {
+            target_machine,
+            level_middle_end,
+            level_back_end,
+            run_inliner,
+            pass_manager_module: None,
+            pass_manager_function: None,
+        })
+    }
+
+    ///
+    /// Sets the module which is to be optimized.
+    ///
+    pub fn set_module(&mut self, module: &inkwell::module::Module<'ctx>) {
+        module.set_triple(&self.target_machine.get_triple());
+        module.set_data_layout(&self.target_machine.get_target_data().get_data_layout());
 
         let pass_manager_builder = inkwell::passes::PassManagerBuilder::create();
         pass_manager_builder.set_optimization_level(self.level_middle_end);
@@ -90,8 +94,6 @@ impl<'ctx> Optimizer<'ctx> {
 
         self.pass_manager_module = Some(pass_manager_module);
         self.pass_manager_function = Some(pass_manager_function);
-
-        Ok(())
     }
 
     ///
@@ -130,5 +132,12 @@ impl<'ctx> Optimizer<'ctx> {
             .as_ref()
             .expect("The module has not been set")
             .run_on(&function)
+    }
+
+    ///
+    /// Returns the target machine reference.
+    ///
+    pub fn target_machine(&self) -> &inkwell::targets::TargetMachine {
+        &self.target_machine
     }
 }
