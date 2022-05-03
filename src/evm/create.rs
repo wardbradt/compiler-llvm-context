@@ -5,9 +5,8 @@
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
-use crate::context::address_space::AddressSpace;
 use crate::context::Context;
-use crate::Dependency;
+use crate::{AddressSpace, Dependency};
 
 ///
 /// Translates the contract `create` instruction.
@@ -21,7 +20,17 @@ pub fn create<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    create2(context, value, input_offset, input_length, None)
+    crate::evm::check_value_zero(context, value);
+
+    let address = call_precompile(
+        context,
+        input_offset,
+        input_length,
+        "create(bytes32,bytes32,bytes)",
+        None,
+    )?;
+
+    Ok(Some(address.as_basic_value_enum()))
 }
 
 ///
@@ -39,27 +48,12 @@ where
 {
     crate::evm::check_value_zero(context, value);
 
-    let hash_pointer =
-        context.access_memory(input_offset, AddressSpace::Heap, "create_hash_pointer");
-    let hash = context.build_load(hash_pointer, "create_hash_value");
-
-    let constructor_input_offset = context.builder().build_int_add(
-        input_offset,
-        context.field_const(compiler_common::SIZE_FIELD as u64),
-        "create_input_offset",
-    );
-    let constructor_input_length = context.builder().build_int_sub(
-        input_length,
-        context.field_const(compiler_common::SIZE_FIELD as u64),
-        "create_input_length",
-    );
-
     let address = call_precompile(
         context,
-        hash.into_int_value(),
-        salt.unwrap_or_else(|| context.field_const(0)),
-        constructor_input_offset,
-        constructor_input_length,
+        input_offset,
+        input_length,
+        "create2(bytes32,bytes32,bytes)",
+        salt,
     )?;
 
     Ok(Some(address.as_basic_value_enum()))
@@ -93,10 +87,15 @@ where
 }
 
 ///
-/// Translates the contract hash size instruction, which is actually used to set the hash of the
-/// contract being created, or other related auxiliary data.
+/// Translates the deployer call header size instruction, Usually, the header consists of:
+/// - the deployer contract method signature
+/// - the salt if the call is `create2`, or zero if the call is `create1`
+/// - the hash of the bytecode of the contract whose instance is being created
 ///
-/// `datasize` in Yul, `PUSH #[$]` in legacy assembly.
+/// If the call is `create1`, the space for the salt is still allocated, because the memory for the
+/// header is allocated before it is known which version of `create` is going to be used.
+///
+/// Concerning AST, it looks like `datasize` in Yul, and `PUSH #[$]` in the EVM legacy assembly.
 ///
 pub fn contract_hash_size<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
@@ -113,7 +112,7 @@ where
 
     Ok(Some(
         context
-            .field_const(compiler_common::SIZE_FIELD as u64)
+            .field_const((compiler_common::SIZE_X32 + compiler_common::SIZE_FIELD * 2) as u64)
             .as_basic_value_enum(),
     ))
 }
@@ -123,10 +122,10 @@ where
 ///
 fn call_precompile<'ctx, 'dep, D>(
     context: &mut Context<'ctx, 'dep, D>,
-    hash: inkwell::values::IntValue<'ctx>,
-    salt: inkwell::values::IntValue<'ctx>,
     input_offset: inkwell::values::IntValue<'ctx>,
     input_length: inkwell::values::IntValue<'ctx>,
+    signature: &'static str,
+    salt: Option<inkwell::values::IntValue<'ctx>>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -136,13 +135,35 @@ where
     let input_length_shifted = context.builder().build_left_shift(
         input_length,
         context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        "create_precompile_call_input_length_shifted",
+        "deployer_precompile_call_input_length_shifted",
     );
     let abi_data = context.builder().build_int_add(
         input_length_shifted,
         input_offset,
-        "create_precompile_call_abi_data",
+        "deployer_precompile_call_abi_data",
     );
+
+    let signature_hash = compiler_common::keccak256(signature.as_bytes());
+    let signature_pointer = context.access_memory(
+        input_offset,
+        AddressSpace::Heap,
+        "deployer_precompile_call_signature_pointer",
+    );
+    let signature_value = context.field_const_str(signature_hash.as_str());
+    context.build_store(signature_pointer, signature_value);
+
+    let salt_offset = context.builder().build_int_add(
+        input_offset,
+        context.field_const(compiler_common::SIZE_X32 as u64),
+        "deployer_precompile_call_salt_offset",
+    );
+    let salt_pointer = context.access_memory(
+        salt_offset,
+        AddressSpace::Heap,
+        "deployer_precompile_call_salt_pointer",
+    );
+    let salt_value = salt.unwrap_or_else(|| context.field_const(0));
+    context.build_store(salt_pointer, salt_value);
 
     let result_type = context
         .structure_type(vec![
@@ -155,7 +176,7 @@ where
         ])
         .as_basic_type_enum();
     let result_pointer =
-        context.build_alloca(result_type, "contract_precompile_call_result_pointer");
+        context.build_alloca(result_type, "deployer_precompile_call_result_pointer");
 
     let result_pointer = context
         .build_invoke(
@@ -165,7 +186,7 @@ where
                 abi_data.as_basic_value_enum(),
                 result_pointer.as_basic_value_enum(),
             ],
-            "create_precompile_call_external",
+            "deployer_precompile_call_external",
         )
         .expect("Always returns a value");
     let result_address_pointer = unsafe {
@@ -177,12 +198,12 @@ where
                     .integer_type(compiler_common::BITLENGTH_X32)
                     .const_zero(),
             ],
-            "create_precompile_call_external_result_address_pointer",
+            "deployer_precompile_call_external_result_address_pointer",
         )
     };
     let result_address = context.build_load(
         result_address_pointer,
-        "create_precompile_call_external_result_address",
+        "deployer_precompile_call_external_result_address",
     );
 
     Ok(result_address)
