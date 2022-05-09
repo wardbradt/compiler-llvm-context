@@ -172,7 +172,7 @@ where
 
     let arguments_offset_offset = context.builder().build_int_add(
         salt_offset,
-        context.field_const(compiler_common::SIZE_FIELD as u64),
+        context.field_const((compiler_common::SIZE_FIELD * 2) as u64),
         "deployer_call_arguments_offset_offset",
     );
     let arguments_offset_pointer = context.access_memory(
@@ -273,9 +273,9 @@ where
         result_abi_data.into_int_value(),
         context.field_const(u64::MAX as u64),
         "deployer_call_child_address_offset",
-    ); // TODO: use the actual offset - possibily a back-end bug
+    );
     let child_address_pointer = context.access_memory(
-        context.field_const(0),
+        child_address_offset,
         AddressSpace::Child,
         "deployer_call_child_address_pointer",
     );
