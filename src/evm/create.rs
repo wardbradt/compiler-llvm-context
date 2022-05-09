@@ -112,7 +112,7 @@ where
 
     Ok(Some(
         context
-            .field_const((compiler_common::SIZE_X32 + compiler_common::SIZE_FIELD * 2) as u64)
+            .field_const((compiler_common::SIZE_X32 + compiler_common::SIZE_FIELD * 4) as u64)
             .as_basic_value_enum(),
     ))
 }
@@ -164,6 +164,38 @@ where
     );
     let salt_value = salt.unwrap_or_else(|| context.field_const(0));
     context.build_store(salt_pointer, salt_value);
+
+    let arguments_offset_offset = context.builder().build_int_add(
+        salt_offset,
+        context.field_const(compiler_common::SIZE_FIELD as u64),
+        "deployer_precompile_call_arguments_offset_offset",
+    );
+    let arguments_offset_pointer = context.access_memory(
+        arguments_offset_offset,
+        AddressSpace::Heap,
+        "deployer_precompile_call_arguments_offset_pointer",
+    );
+    context.build_store(
+        arguments_offset_pointer,
+        context.field_const((compiler_common::SIZE_X32 + compiler_common::SIZE_FIELD * 3) as u64),
+    );
+
+    let arguments_length_offset = context.builder().build_int_add(
+        arguments_offset_offset,
+        context.field_const(compiler_common::SIZE_FIELD as u64),
+        "deployer_precompile_call_arguments_length_offset",
+    );
+    let arguments_length_pointer = context.access_memory(
+        arguments_length_offset,
+        AddressSpace::Heap,
+        "deployer_precompile_call_arguments_length_pointer",
+    );
+    let arguments_length_value = context.builder().build_int_sub(
+        input_length,
+        context.field_const((compiler_common::SIZE_X32 + compiler_common::SIZE_FIELD * 4) as u64),
+        "deployer_precompile_call_arguments_length",
+    );
+    context.build_store(arguments_length_pointer, arguments_length_value);
 
     let result_type = context
         .structure_type(vec![
