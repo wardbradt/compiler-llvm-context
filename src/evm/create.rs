@@ -130,7 +130,7 @@ fn call_precompile<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let address = context.field_const_str_hex(compiler_common::ABI_ADDRESS_DEPLOYER);
+    let address = context.field_const_str_hex(compiler_common::ABI_ADDRESS_CONTRACT_DEPLOYER);
 
     let input_length_shifted = context.builder().build_left_shift(
         input_length,
