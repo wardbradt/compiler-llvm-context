@@ -687,6 +687,17 @@ where
         offset: inkwell::values::IntValue<'ctx>,
         length: inkwell::values::IntValue<'ctx>,
     ) {
+        let offset = self.builder.build_and(
+            offset,
+            self.field_const(u64::MAX),
+            "contract_exit_offset_truncated",
+        );
+        let length = self.builder.build_and(
+            length,
+            self.field_const(u64::MAX),
+            "contract_exit_length_truncated",
+        );
+
         let length_shifted = self.builder.build_left_shift(
             length,
             self.field_const(compiler_common::BITLENGTH_X64 as u64),
@@ -796,8 +807,8 @@ where
     ///
     pub fn write_abi_data(
         &self,
-        data_offset: inkwell::values::IntValue<'ctx>,
-        data_length: inkwell::values::IntValue<'ctx>,
+        offset: inkwell::values::IntValue<'ctx>,
+        length: inkwell::values::IntValue<'ctx>,
         address_space: AddressSpace,
     ) {
         let (offset_offset, length_offset) = match address_space {
@@ -815,19 +826,19 @@ where
             ),
         };
 
-        let data_offset_pointer = self.access_memory(
+        let offset_pointer = self.access_memory(
             self.field_const((offset_offset * compiler_common::SIZE_FIELD) as u64),
             AddressSpace::Heap,
-            "data_offset_pointer",
+            "offset_pointer",
         );
-        self.build_store(data_offset_pointer, data_offset);
+        self.build_store(offset_pointer, offset);
 
-        let data_length_pointer = self.access_memory(
+        let length_pointer = self.access_memory(
             self.field_const((length_offset * compiler_common::SIZE_FIELD) as u64),
             AddressSpace::Heap,
-            "data_length_pointer",
+            "length_pointer",
         );
-        self.build_store(data_length_pointer, data_length);
+        self.build_store(length_pointer, length);
     }
 
     ///
