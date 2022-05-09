@@ -273,9 +273,9 @@ where
         result_abi_data.into_int_value(),
         context.field_const(u64::MAX as u64),
         "deployer_call_child_address_offset",
-    );
+    ); // TODO: use the actual offset - possibily a back-end bug
     let child_address_pointer = context.access_memory(
-        child_address_offset,
+        context.field_const(0),
         AddressSpace::Child,
         "deployer_call_child_address_pointer",
     );
