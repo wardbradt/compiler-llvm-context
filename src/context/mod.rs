@@ -496,7 +496,7 @@ where
             function.add_attribute(
                 inkwell::attributes::AttributeLoc::Param(0),
                 self.llvm
-                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::LLVMAttrKindAbiData, 1),
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::LLVMAttrKindAbiData, 0),
             );
         }
 
