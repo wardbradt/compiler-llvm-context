@@ -29,8 +29,6 @@ pub fn call<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let ecrecover_block = context.append_basic_block("contract_call_ecrecover_block");
-    let sha256_block = context.append_basic_block("contract_call_sha256_block");
     let identity_block = context.append_basic_block("contract_call_identity_block");
     let tol1_block = context.append_basic_block("contract_call_toL1_block");
     let code_source_block = context.append_basic_block("contract_call_code_source_block");
@@ -40,10 +38,6 @@ where
     let ordinary_block = context.append_basic_block("contract_call_ordinary_block");
     let join_block = context.append_basic_block("contract_call_join_block");
 
-    let address_pointer =
-        context.build_alloca(context.field_type(), "contract_call_address_pointer");
-    context.build_store(address_pointer, address);
-
     let result_pointer = context.build_alloca(context.field_type(), "contract_call_result_pointer");
     context.build_store(result_pointer, context.field_const(0));
 
@@ -51,14 +45,6 @@ where
         address,
         ordinary_block,
         &[
-            (
-                context.field_const_str(compiler_common::SOLIDITY_ADDRESS_ECRECOVER),
-                ecrecover_block,
-            ),
-            (
-                context.field_const_str(compiler_common::SOLIDITY_ADDRESS_SHA256),
-                sha256_block,
-            ),
             (
                 context.field_const_str(compiler_common::SOLIDITY_ADDRESS_IDENTITY),
                 identity_block,
@@ -85,24 +71,6 @@ where
             ),
         ],
     );
-
-    {
-        context.set_basic_block(ecrecover_block);
-        context.build_store(
-            address_pointer,
-            context.field_const_str(compiler_common::ABI_ADDRESS_ECRECOVER),
-        );
-        context.build_unconditional_branch(ordinary_block);
-    }
-
-    {
-        context.set_basic_block(sha256_block);
-        context.build_store(
-            address_pointer,
-            context.field_const_str(compiler_common::ABI_ADDRESS_SHA256),
-        );
-        context.build_unconditional_branch(ordinary_block);
-    }
 
     {
         context.set_basic_block(identity_block);
@@ -227,9 +195,6 @@ where
     if let Some(value) = value {
         crate::evm::check_value_zero(context, value);
     }
-    let address = context
-        .build_load(address_pointer, "contract_call_address_updated")
-        .into_int_value();
     let result = call_default(
         context,
         function,
