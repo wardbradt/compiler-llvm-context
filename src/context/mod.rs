@@ -492,6 +492,14 @@ where
             return call_site_value.try_as_basic_value().left();
         }
 
+        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
+            function.add_attribute(
+                inkwell::attributes::AttributeLoc::Param(0),
+                self.llvm
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::LLVMAttrKindAbiData, 1),
+            );
+        }
+
         for index in 0..function.count_params() {
             if function
                 .get_nth_param(index)
