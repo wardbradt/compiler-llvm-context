@@ -182,7 +182,7 @@ where
     );
     context.build_store(
         arguments_offset_pointer,
-        context.field_const((compiler_common::SIZE_X32 + compiler_common::SIZE_FIELD * 3) as u64),
+        context.field_const((compiler_common::SIZE_FIELD * 3) as u64),
     );
 
     let arguments_length_offset = context.builder().build_int_add(
