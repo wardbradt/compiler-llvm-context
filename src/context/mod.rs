@@ -220,8 +220,12 @@ where
         &mut self,
         name: &str,
         r#type: inkwell::types::FunctionType<'ctx>,
-        linkage: Option<inkwell::module::Linkage>,
+        mut linkage: Option<inkwell::module::Linkage>,
     ) {
+        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
+            linkage = Some(inkwell::module::Linkage::External);
+        }
+
         let value = self.module().add_function(name, r#type, linkage);
         for index in 0..value.count_params() {
             if value
@@ -231,6 +235,13 @@ where
             {
                 value.set_param_alignment(index, compiler_common::SIZE_FIELD as u32);
             }
+        }
+
+        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
+            value.add_attribute(
+                inkwell::attributes::AttributeLoc::Param(0),
+                self.llvm.create_string_attribute("abi_data", ""),
+            );
         }
 
         value.set_personality_function(self.runtime.personality);
@@ -490,17 +501,6 @@ where
 
         if name == Runtime::FUNCTION_CXA_THROW {
             return call_site_value.try_as_basic_value().left();
-        }
-
-        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
-            function.add_attribute(
-                inkwell::attributes::AttributeLoc::Function,
-                self.llvm.create_enum_attribute(inkwell::LLVMAttributeKindCode::LLVMAttrKindNoInline, 0),
-            );
-            function.add_attribute(
-                inkwell::attributes::AttributeLoc::Param(0),
-                self.llvm.create_string_attribute("abi_data", ""),
-            );
         }
 
         for index in 0..function.count_params() {
