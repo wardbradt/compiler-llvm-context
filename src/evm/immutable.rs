@@ -17,7 +17,7 @@ pub fn load<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let position = context.field_const_str(compiler_common::keccak256(key.as_bytes()).as_str());
+    let position = context.field_const_str(crate::hashes::keccak256(key.as_bytes()).as_str());
     let value = context
         .build_call(
             context.runtime.storage_load,
@@ -39,7 +39,7 @@ pub fn store<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let position = context.field_const_str(compiler_common::keccak256(key.as_bytes()).as_str());
+    let position = context.field_const_str(crate::hashes::keccak256(key.as_bytes()).as_str());
     context.build_call(
         context.runtime.storage_store,
         &[value.as_basic_value_enum(), position.as_basic_value_enum()],

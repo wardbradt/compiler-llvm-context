@@ -730,7 +730,7 @@ where
             "contract_exit_with_message_abi_data",
         );
 
-        let error_hash = compiler_common::keccak256(message.as_bytes());
+        let error_hash = crate::hashes::keccak256(message.as_bytes());
         let error_code = self.field_const_str(error_hash.as_str());
         let error_code_shifted = self.builder.build_left_shift(
             error_code,

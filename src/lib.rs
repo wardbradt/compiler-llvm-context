@@ -5,6 +5,7 @@
 pub(crate) mod context;
 pub(crate) mod dump_flag;
 pub(crate) mod evm;
+pub(crate) mod hashes;
 
 pub use self::context::address_space::AddressSpace;
 pub use self::context::argument::Argument;
@@ -38,6 +39,8 @@ pub use self::evm::memory;
 pub use self::evm::r#return;
 pub use self::evm::return_data;
 pub use self::evm::storage;
+pub use self::hashes::bytecode_hash;
+pub use self::hashes::keccak256;
 
 ///
 /// Initializes the zkEVM target machine.

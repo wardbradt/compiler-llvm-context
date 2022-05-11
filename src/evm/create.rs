@@ -148,7 +148,7 @@ where
         "deployer_call_abi_data",
     );
 
-    let signature_hash = compiler_common::keccak256(signature.as_bytes());
+    let signature_hash = crate::hashes::keccak256(signature.as_bytes());
     let signature_pointer = context.access_memory(
         input_offset,
         AddressSpace::Heap,
