@@ -495,8 +495,7 @@ where
         if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
             function.add_attribute(
                 inkwell::attributes::AttributeLoc::Param(0),
-                self.llvm
-                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::LLVMAttrKindAbiData, 0),
+                self.llvm.create_string_attribute("abi_data", ""),
             );
         }
 
