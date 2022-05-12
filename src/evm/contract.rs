@@ -35,6 +35,7 @@ where
     let precompile_block = context.append_basic_block("contract_call_precompile_block");
     let meta_block = context.append_basic_block("contract_call_meta_block");
     let mimic_call_block = context.append_basic_block("contract_call_mimic_call_block");
+    let system_call_block = context.append_basic_block("contract_call_system_call_block");
     let ordinary_block = context.append_basic_block("contract_call_ordinary_block");
     let join_block = context.append_basic_block("contract_call_join_block");
 
@@ -69,6 +70,10 @@ where
                 context.field_const_str(compiler_common::ABI_ADDRESS_MIMIC_CALL),
                 mimic_call_block,
             ),
+            (
+                context.field_const_str(compiler_common::ABI_ADDRESS_SYSTEM_CALL),
+                system_call_block,
+            ),
         ],
     );
 
@@ -89,9 +94,10 @@ where
         let contract_call_tol1_is_not_first_block =
             context.append_basic_block("contract_call_toL1_is_not_first_block");
 
+        let is_first = gas;
         let is_first_equals_zero = context.builder().build_int_compare(
             inkwell::IntPredicate::EQ,
-            gas,
+            is_first,
             context.field_const(0),
             "contract_call_toL1_is_first_equals_zero",
         );
@@ -184,11 +190,59 @@ where
             address,
             mimic,
             abi_data,
-            output_offset,
-            output_length,
         )?;
         context.build_store(result_pointer, result);
         context.build_unconditional_branch(join_block);
+    }
+
+    {
+        context.set_basic_block(system_call_block);
+        let address = gas;
+        let abi_data = input_offset;
+
+        let system_far_call_block = context.append_basic_block("system_far_call_block");
+        let system_delegate_call_block = context.append_basic_block("system_delegate_call_block");
+
+        let is_delegate = input_length;
+        let is_delegate_equals_zero = context.builder().build_int_compare(
+            inkwell::IntPredicate::EQ,
+            is_delegate,
+            context.field_const(0),
+            "system_far_call_is_delegate_equals_zero",
+        );
+        context.build_conditional_branch(
+            is_delegate_equals_zero,
+            system_far_call_block,
+            system_delegate_call_block,
+        );
+
+        {
+            context.set_basic_block(system_far_call_block);
+            let result = call_system(
+                context,
+                context.runtime.far_call,
+                address,
+                abi_data,
+                output_offset,
+                output_length,
+            )?;
+            context.build_store(result_pointer, result);
+            context.build_unconditional_branch(join_block);
+        }
+
+        {
+            context.set_basic_block(system_delegate_call_block);
+            let result = call_system(
+                context,
+                context.runtime.delegate_call,
+                address,
+                abi_data,
+                output_offset,
+                output_length,
+            )?;
+            context.build_store(result_pointer, result);
+            context.build_unconditional_branch(join_block);
+        }
     }
 
     context.set_basic_block(ordinary_block);
@@ -372,8 +426,6 @@ fn call_mimic<'ctx, 'dep, D>(
     address: inkwell::values::IntValue<'ctx>,
     mimic: inkwell::values::IntValue<'ctx>,
     abi_data: inkwell::values::IntValue<'ctx>,
-    output_offset: inkwell::values::IntValue<'ctx>,
-    output_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -456,17 +508,121 @@ where
         context.field_const(u64::MAX as u64),
         "mimic_call_child_data_length",
     );
-    let source = context.access_memory(child_data_offset, AddressSpace::Child, "mimic_call_source");
 
-    let destination =
-        context.access_memory(output_offset, AddressSpace::Heap, "mimic_call_destination");
+    context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
+
+    Ok(result_status_code.as_basic_value_enum())
+}
+
+///
+/// Generates a system call.
+///
+fn call_system<'ctx, 'dep, D>(
+    context: &mut Context<'ctx, 'dep, D>,
+    function: inkwell::values::FunctionValue<'ctx>,
+    address: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::IntValue<'ctx>,
+    output_offset: inkwell::values::IntValue<'ctx>,
+    output_length: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let result_type = context
+        .structure_type(vec![
+            context
+                .integer_type(compiler_common::BITLENGTH_FIELD)
+                .as_basic_type_enum(),
+            context
+                .integer_type(compiler_common::BITLENGTH_BOOLEAN)
+                .as_basic_type_enum(),
+        ])
+        .as_basic_type_enum();
+    let result_pointer = context.build_alloca(result_type, "system_far_call_result_pointer");
+
+    let result_pointer = context
+        .build_invoke(
+            function,
+            &[
+                address.as_basic_value_enum(),
+                abi_data.as_basic_value_enum(),
+                result_pointer.as_basic_value_enum(),
+            ],
+            "system_far_call_external",
+        )
+        .expect("IntrinsicFunction always returns a flag");
+    let result_abi_data_pointer = unsafe {
+        context.builder().build_gep(
+            result_pointer.into_pointer_value(),
+            &[
+                context.field_const(0),
+                context
+                    .integer_type(compiler_common::BITLENGTH_X32)
+                    .const_zero(),
+            ],
+            "system_far_call_external_result_abi_data_pointer",
+        )
+    };
+    let result_abi_data = context.build_load(
+        result_abi_data_pointer,
+        "system_far_call_external_result_abi_data",
+    );
+    let result_status_code_pointer = unsafe {
+        context.builder().build_gep(
+            result_pointer.into_pointer_value(),
+            &[
+                context.field_const(0),
+                context
+                    .integer_type(compiler_common::BITLENGTH_X32)
+                    .const_int(1, false),
+            ],
+            "system_far_call_external_result_status_code_pointer",
+        )
+    };
+    let result_status_code_boolean = context.build_load(
+        result_status_code_pointer,
+        "system_far_call_external_result_status_code_boolean",
+    );
+    let result_status_code = context.builder().build_int_z_extend_or_bit_cast(
+        result_status_code_boolean.into_int_value(),
+        context.field_type(),
+        "system_far_call_external_result_status_code",
+    );
+
+    let child_data_offset = context.builder().build_and(
+        result_abi_data.into_int_value(),
+        context.field_const(u64::MAX as u64),
+        "system_far_call_child_data_offset",
+    );
+    let child_data_length_shifted = context.builder().build_right_shift(
+        result_abi_data.into_int_value(),
+        context.field_const(compiler_common::BITLENGTH_X64 as u64),
+        false,
+        "system_far_call_child_data_length_shifted",
+    );
+    let child_data_length = context.builder().build_and(
+        child_data_length_shifted,
+        context.field_const(u64::MAX as u64),
+        "system_far_call_child_data_length",
+    );
+    let source = context.access_memory(
+        child_data_offset,
+        AddressSpace::Child,
+        "system_far_call_source",
+    );
+
+    let destination = context.access_memory(
+        output_offset,
+        AddressSpace::Heap,
+        "system_far_call_destination",
+    );
 
     context.build_memcpy(
         IntrinsicFunction::MemoryCopyFromChild,
         destination,
         source,
         output_length,
-        "mimic_call_memcpy_from_child",
+        "system_far_call_memcpy_from_child",
     );
 
     context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
