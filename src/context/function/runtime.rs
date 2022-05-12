@@ -111,10 +111,7 @@ impl<'ctx> Runtime<'ctx> {
         );
         cxa_throw.add_attribute(
             inkwell::attributes::AttributeLoc::Function,
-            llvm.create_enum_attribute(
-                inkwell::LLVMAttributeKindCode::LLVMAttrKindStackProtectReq,
-                0,
-            ),
+            llvm.create_enum_attribute(inkwell::LLVMAttributeKindCode::NoProfile, 0),
         );
 
         let add_mod = module.add_function(
