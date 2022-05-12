@@ -220,8 +220,12 @@ where
         &mut self,
         name: &str,
         r#type: inkwell::types::FunctionType<'ctx>,
-        linkage: Option<inkwell::module::Linkage>,
+        mut linkage: Option<inkwell::module::Linkage>,
     ) {
+        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
+            linkage = Some(inkwell::module::Linkage::External);
+        }
+
         let value = self.module().add_function(name, r#type, linkage);
         for index in 0..value.count_params() {
             if value
