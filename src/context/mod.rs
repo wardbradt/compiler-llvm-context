@@ -246,7 +246,7 @@ where
             value.add_attribute(
                 inkwell::attributes::AttributeLoc::Param(0),
                 self.llvm
-                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::AbiData, 0),
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
             );
         }
 
@@ -513,7 +513,7 @@ where
             call_site_value.add_attribute(
                 inkwell::attributes::AttributeLoc::Param(0),
                 self.llvm
-                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::AbiData, 0),
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
             );
         }
 
