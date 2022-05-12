@@ -220,12 +220,8 @@ where
         &mut self,
         name: &str,
         r#type: inkwell::types::FunctionType<'ctx>,
-        mut linkage: Option<inkwell::module::Linkage>,
+        linkage: Option<inkwell::module::Linkage>,
     ) {
-        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
-            linkage = Some(inkwell::module::Linkage::External);
-        }
-
         let value = self.module().add_function(name, r#type, linkage);
         for index in 0..value.count_params() {
             if value
@@ -239,8 +235,14 @@ where
 
         if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
             value.add_attribute(
+                inkwell::attributes::AttributeLoc::Function,
+                self.llvm
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::NoInline, 0),
+            );
+            value.add_attribute(
                 inkwell::attributes::AttributeLoc::Param(0),
-                self.llvm.create_string_attribute("abi_data", ""),
+                self.llvm
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::AbiData, 0),
             );
         }
 
@@ -501,6 +503,14 @@ where
 
         if name == Runtime::FUNCTION_CXA_THROW {
             return call_site_value.try_as_basic_value().left();
+        }
+
+        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
+            call_site_value.add_attribute(
+                inkwell::attributes::AttributeLoc::Param(0),
+                self.llvm
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::AbiData, 0),
+            );
         }
 
         for index in 0..function.count_params() {
