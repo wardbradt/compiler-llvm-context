@@ -224,6 +224,7 @@ where
             "deployer_call",
         )
         .expect("Always returns a value");
+
     let result_abi_data_pointer = unsafe {
         context.builder().build_gep(
             result_pointer.into_pointer_value(),
@@ -238,6 +239,24 @@ where
     };
     let result_abi_data =
         context.build_load(result_abi_data_pointer, "deployer_call_result_abi_data");
+    let child_data_offset = context.builder().build_and(
+        result_abi_data.into_int_value(),
+        context.field_const(u64::MAX as u64),
+        "deployer_call_child_data_offset",
+    );
+    let child_data_length_shifted = context.builder().build_right_shift(
+        result_abi_data.into_int_value(),
+        context.field_const(compiler_common::BITLENGTH_X64 as u64),
+        false,
+        "deployer_call_child_data_length_shifted",
+    );
+    let child_data_length = context.builder().build_and(
+        child_data_length_shifted,
+        context.field_const(u64::MAX as u64),
+        "deployer_call_child_data_length",
+    );
+    context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
+
     let result_status_code_pointer = unsafe {
         context.builder().build_gep(
             result_pointer.into_pointer_value(),
@@ -263,17 +282,12 @@ where
     );
 
     context.set_basic_block(deployer_call_success_block);
-    let child_address_offset = context.builder().build_and(
-        result_abi_data.into_int_value(),
-        context.field_const(u64::MAX as u64),
-        "deployer_call_child_address_offset",
-    );
-    let child_address_pointer = context.access_memory(
-        child_address_offset,
+    let child_data_pointer = context.access_memory(
+        child_data_offset,
         AddressSpace::Child,
-        "deployer_call_child_address_pointer",
+        "deployer_call_child_pointer",
     );
-    let child_address = context.build_load(child_address_pointer, "deployer_call_child_address");
+    let child_address = context.build_load(child_data_pointer, "deployer_call_child_address");
     context.build_store(return_pointer, child_address);
     context.build_unconditional_branch(deployer_call_join_block);
 

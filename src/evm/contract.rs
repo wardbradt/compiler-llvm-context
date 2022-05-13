@@ -338,6 +338,7 @@ where
             "contract_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
+
     let result_abi_data_pointer = unsafe {
         context.builder().build_gep(
             result_pointer.into_pointer_value(),
@@ -354,6 +355,7 @@ where
         result_abi_data_pointer,
         "contract_call_external_result_abi_data",
     );
+
     let result_status_code_pointer = unsafe {
         context.builder().build_gep(
             result_pointer.into_pointer_value(),
@@ -454,6 +456,7 @@ where
             "mimic_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
+
     let result_abi_data_pointer = unsafe {
         context.builder().build_gep(
             result_pointer.into_pointer_value(),
@@ -470,6 +473,7 @@ where
         result_abi_data_pointer,
         "mimic_call_external_result_abi_data",
     );
+
     let result_status_code_pointer = unsafe {
         context.builder().build_gep(
             result_pointer.into_pointer_value(),
@@ -551,6 +555,7 @@ where
             "system_far_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
+
     let result_abi_data_pointer = unsafe {
         context.builder().build_gep(
             result_pointer.into_pointer_value(),
@@ -567,6 +572,7 @@ where
         result_abi_data_pointer,
         "system_far_call_external_result_abi_data",
     );
+
     let result_status_code_pointer = unsafe {
         context.builder().build_gep(
             result_pointer.into_pointer_value(),
