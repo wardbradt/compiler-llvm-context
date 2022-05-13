@@ -190,6 +190,7 @@ where
             address,
             mimic,
             abi_data,
+            output_offset,
         )?;
         context.build_store(result_pointer, result);
         context.build_unconditional_branch(join_block);
@@ -426,6 +427,7 @@ fn call_mimic<'ctx, 'dep, D>(
     address: inkwell::values::IntValue<'ctx>,
     mimic: inkwell::values::IntValue<'ctx>,
     abi_data: inkwell::values::IntValue<'ctx>,
+    output_offset: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -508,6 +510,13 @@ where
         context.field_const(u64::MAX as u64),
         "mimic_call_child_data_length",
     );
+
+    let output_offset_pointer = context.access_memory(
+        output_offset,
+        AddressSpace::Heap,
+        "mimic_call_output_length_pointer",
+    );
+    context.build_store(output_offset_pointer, child_data_offset);
 
     context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
 
