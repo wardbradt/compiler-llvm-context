@@ -674,14 +674,10 @@ where
                 .as_basic_value_enum()],
             "landing",
         );
-        self.build_call(
-            self.runtime.cxa_throw,
-            &[self
-                .integer_type(compiler_common::BITLENGTH_BYTE)
-                .ptr_type(AddressSpace::Stack.into())
-                .const_null()
-                .as_basic_value_enum(); 3],
-            Runtime::FUNCTION_CXA_THROW,
+        self.build_exit(
+            IntrinsicFunction::Revert,
+            self.field_const(0),
+            self.field_const(0),
         );
         self.build_unreachable();
     }
@@ -691,14 +687,10 @@ where
     ///
     pub fn build_throw_block(&self) {
         self.set_basic_block(self.function().throw_block);
-        self.build_call(
-            self.runtime.cxa_throw,
-            &[self
-                .integer_type(compiler_common::BITLENGTH_BYTE)
-                .ptr_type(AddressSpace::Stack.into())
-                .const_null()
-                .as_basic_value_enum(); 3],
-            Runtime::FUNCTION_CXA_THROW,
+        self.build_exit(
+            IntrinsicFunction::Revert,
+            self.field_const(0),
+            self.field_const(0),
         );
         self.build_unreachable();
     }
