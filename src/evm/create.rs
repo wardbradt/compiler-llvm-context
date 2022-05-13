@@ -5,7 +5,6 @@
 use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
-use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::Context;
 use crate::AddressSpace;
 use crate::Dependency;
@@ -132,7 +131,7 @@ fn call_precompile<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    let deployer_call_error_block = context.append_basic_block("deployer_call_error_block");
+    let deployer_call_success_block = context.append_basic_block("deployer_call_success_block");
     let deployer_call_join_block = context.append_basic_block("deployer_call_join_block");
 
     let address = context.field_const_str_hex(compiler_common::ABI_ADDRESS_CONTRACT_DEPLOYER);
@@ -255,20 +254,15 @@ where
         result_status_code_pointer,
         "deployer_call_result_status_code_boolean",
     );
+    let return_pointer = context.build_alloca(context.field_type(), "deployer_call_return_pointer");
+    context.build_store(return_pointer, context.field_const(0));
     context.build_conditional_branch(
         result_status_code_boolean.into_int_value(),
+        deployer_call_success_block,
         deployer_call_join_block,
-        deployer_call_error_block,
     );
 
-    context.set_basic_block(deployer_call_error_block);
-    context.build_exit(
-        IntrinsicFunction::Revert,
-        context.field_const(0),
-        context.field_const(0),
-    );
-
-    context.set_basic_block(deployer_call_join_block);
+    context.set_basic_block(deployer_call_success_block);
     let child_address_offset = context.builder().build_and(
         result_abi_data.into_int_value(),
         context.field_const(u64::MAX as u64),
@@ -280,6 +274,10 @@ where
         "deployer_call_child_address_pointer",
     );
     let child_address = context.build_load(child_address_pointer, "deployer_call_child_address");
+    context.build_store(return_pointer, child_address);
+    context.build_unconditional_branch(deployer_call_join_block);
 
-    Ok(child_address)
+    context.set_basic_block(deployer_call_join_block);
+    let result = context.build_load(return_pointer, "deployer_call_result");
+    Ok(result)
 }
