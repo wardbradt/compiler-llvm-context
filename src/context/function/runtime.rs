@@ -128,6 +128,7 @@ impl<'ctx> Runtime<'ctx> {
                 ),
             Some(inkwell::module::Linkage::External),
         );
+        Self::apply_default_math(llvm, add_mod);
         let mul_mod = module.add_function(
             Self::FUNCTION_MULMOD,
             llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
@@ -142,7 +143,7 @@ impl<'ctx> Runtime<'ctx> {
                 ),
             Some(inkwell::module::Linkage::External),
         );
-
+        Self::apply_default_math(llvm, mul_mod);
         let sign_extend = module.add_function(
             Self::FUNCTION_SIGNEXTEND,
             llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
@@ -157,6 +158,7 @@ impl<'ctx> Runtime<'ctx> {
                 ),
             Some(inkwell::module::Linkage::External),
         );
+        Self::apply_default_math(llvm, sign_extend);
 
         let storage_load = module.add_function(
             Self::FUNCTION_SLOAD,
@@ -273,6 +275,28 @@ impl<'ctx> Runtime<'ctx> {
             static_call,
             delegate_call,
             mimic_call,
+        }
+    }
+
+    ///
+    /// Applies the default attribute set for the math function.
+    ///
+    fn apply_default_math(
+        llvm: &'ctx inkwell::context::Context,
+        function: inkwell::values::FunctionValue<'ctx>,
+    ) {
+        for attribute_kind in [
+            inkwell::LLVMAttributeKindCode::MustProgress,
+            inkwell::LLVMAttributeKindCode::NoUnwind,
+            inkwell::LLVMAttributeKindCode::ReadNone,
+            inkwell::LLVMAttributeKindCode::WillReturn,
+        ]
+        .into_iter()
+        {
+            function.add_attribute(
+                inkwell::attributes::AttributeLoc::Function,
+                llvm.create_enum_attribute(attribute_kind, 0),
+            );
         }
     }
 }
