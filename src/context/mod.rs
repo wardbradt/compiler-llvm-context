@@ -222,7 +222,9 @@ where
         r#type: inkwell::types::FunctionType<'ctx>,
         mut linkage: Option<inkwell::module::Linkage>,
     ) {
-        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
+        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX)
+            || name == Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER
+        {
             linkage = Some(inkwell::module::Linkage::External);
         }
 
@@ -237,19 +239,21 @@ where
             }
         }
 
-        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
+        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX)
+            || name == Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER
+        {
             value.add_attribute(
                 inkwell::attributes::AttributeLoc::Function,
                 self.llvm
                     .create_enum_attribute(inkwell::LLVMAttributeKindCode::NoInline, 0),
             );
-            if value.count_params() > 0 {
-                value.add_attribute(
-                    inkwell::attributes::AttributeLoc::Param(0),
-                    self.llvm
-                        .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
-                );
-            }
+        }
+        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) && value.count_params() > 0 {
+            value.add_attribute(
+                inkwell::attributes::AttributeLoc::Param(0),
+                self.llvm
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
+            );
         }
 
         value.set_personality_function(self.runtime.personality);
@@ -505,10 +509,6 @@ where
         args: &[inkwell::values::BasicValueEnum<'ctx>],
         name: &str,
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
-        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
-            return self.build_invoke(function, args, name);
-        }
-
         let call_site_value = self.builder.build_call(function, args, name);
 
         if name == Runtime::FUNCTION_CXA_THROW {
@@ -555,6 +555,64 @@ where
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
         let join_block = self.append_basic_block("join");
 
+        let call_site_value = self.builder.build_invoke(
+            function,
+            args,
+            join_block,
+            self.function().catch_block,
+            name,
+        );
+
+        for index in 0..function.count_params() {
+            if function
+                .get_nth_param(index)
+                .map(|argument| argument.get_type().is_pointer_type())
+                .unwrap_or_default()
+            {
+                call_site_value.set_alignment_attribute(
+                    inkwell::attributes::AttributeLoc::Param(index),
+                    compiler_common::SIZE_FIELD as u32,
+                );
+            }
+        }
+
+        if call_site_value
+            .try_as_basic_value()
+            .map_left(|value| value.is_pointer_value())
+            .left_or_default()
+        {
+            call_site_value.set_alignment_attribute(
+                inkwell::attributes::AttributeLoc::Return,
+                compiler_common::SIZE_FIELD as u32,
+            );
+        }
+
+        self.set_basic_block(join_block);
+        call_site_value.try_as_basic_value().left()
+    }
+
+    ///
+    /// Builds a near call ABI invoke.
+    ///
+    /// Checks if there are no other terminators in the block.
+    ///
+    pub fn build_invoke_near_call_abi(
+        &self,
+        function: inkwell::values::FunctionValue<'ctx>,
+        args: &[inkwell::values::BasicValueEnum<'ctx>],
+        name: &str,
+    ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
+        let success_block = self.append_basic_block("success_block");
+        let join_block = self.append_basic_block("join_block");
+
+        let result_pointer = if let Some(r#type) = function.get_type().get_return_type() {
+            let pointer = self.build_alloca(r#type, "near_call_return_pointer");
+            self.build_store(pointer, r#type.const_zero());
+            Some(pointer)
+        } else {
+            None
+        };
+
         let catch_block = if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
             if let Some(handler) = self
                 .functions
@@ -582,7 +640,7 @@ where
                     "near_call_catch_landing",
                 );
                 self.build_call(handler.value, &[], "near_call_catch_call");
-                self.build_unreachable();
+                self.build_unconditional_branch(join_block);
 
                 self.set_basic_block(current_block);
                 near_call_catch_block
@@ -597,7 +655,7 @@ where
             self.builder
                 .build_invoke(function, args, join_block, catch_block, name);
 
-        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) && function.count_params() > 0 {
+        if function.count_params() > 0 {
             call_site_value.add_attribute(
                 inkwell::attributes::AttributeLoc::Param(0),
                 self.llvm
@@ -629,9 +687,16 @@ where
             );
         }
 
-        self.set_basic_block(join_block);
+        self.set_basic_block(success_block);
+        if let (Some(pointer), Some(value)) =
+            (result_pointer, call_site_value.try_as_basic_value().left())
+        {
+            self.build_store(pointer, value);
+        }
+        self.build_unconditional_branch(join_block);
 
-        call_site_value.try_as_basic_value().left()
+        self.set_basic_block(join_block);
+        result_pointer.map(|pointer| self.build_load(pointer, "near_call_result"))
     }
 
     ///
