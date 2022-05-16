@@ -243,13 +243,11 @@ where
                 self.llvm
                     .create_enum_attribute(inkwell::LLVMAttributeKindCode::NoInline, 0),
             );
-            if value.count_params() > 0 {
-                value.add_attribute(
-                    inkwell::attributes::AttributeLoc::Param(0),
-                    self.llvm
-                        .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
-                );
-            }
+            value.add_attribute(
+                inkwell::attributes::AttributeLoc::Param(0),
+                self.llvm
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
+            );
         }
 
         value.set_personality_function(self.runtime.personality);
@@ -505,14 +503,18 @@ where
         args: &[inkwell::values::BasicValueEnum<'ctx>],
         name: &str,
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
-        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
-            return self.build_invoke(function, args, name);
-        }
-
         let call_site_value = self.builder.build_call(function, args, name);
 
         if name == Runtime::FUNCTION_CXA_THROW {
             return call_site_value.try_as_basic_value().left();
+        }
+
+        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
+            call_site_value.add_attribute(
+                inkwell::attributes::AttributeLoc::Param(0),
+                self.llvm
+                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
+            );
         }
 
         for index in 0..function.count_params() {
@@ -555,55 +557,13 @@ where
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
         let join_block = self.append_basic_block("join");
 
-        let catch_block = if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
-            if let Some(handler) = self
-                .functions
-                .get(Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER)
-            {
-                let current_block = self.basic_block();
-                let near_call_catch_block = self.append_basic_block("near_call_catch_block");
-
-                self.set_basic_block(near_call_catch_block);
-                let landing_pad_type = self.structure_type(vec![
-                    self.integer_type(compiler_common::BITLENGTH_BYTE)
-                        .ptr_type(AddressSpace::Stack.into())
-                        .as_basic_type_enum(),
-                    self.integer_type(compiler_common::BITLENGTH_X32)
-                        .as_basic_type_enum(),
-                ]);
-                self.builder.build_landing_pad(
-                    landing_pad_type,
-                    self.runtime.personality,
-                    vec![self
-                        .integer_type(compiler_common::BITLENGTH_BYTE)
-                        .ptr_type(AddressSpace::Stack.into())
-                        .const_zero()
-                        .as_basic_value_enum()],
-                    "near_call_catch_landing",
-                );
-                self.build_call(handler.value, &[], "near_call_catch_call");
-                self.build_unreachable();
-
-                self.set_basic_block(current_block);
-                near_call_catch_block
-            } else {
-                self.function().catch_block
-            }
-        } else {
-            self.function().catch_block
-        };
-
-        let call_site_value =
-            self.builder
-                .build_invoke(function, args, join_block, catch_block, name);
-
-        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) && function.count_params() > 0 {
-            call_site_value.add_attribute(
-                inkwell::attributes::AttributeLoc::Param(0),
-                self.llvm
-                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
-            );
-        }
+        let call_site_value = self.builder.build_invoke(
+            function,
+            args,
+            join_block,
+            self.function().catch_block,
+            name,
+        );
 
         for index in 0..function.count_params() {
             if function
