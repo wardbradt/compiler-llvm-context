@@ -248,13 +248,6 @@ where
                     .create_enum_attribute(inkwell::LLVMAttributeKindCode::NoInline, 0),
             );
         }
-        if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) && value.count_params() > 0 {
-            value.add_attribute(
-                inkwell::attributes::AttributeLoc::Param(0),
-                self.llvm
-                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
-            );
-        }
 
         value.set_personality_function(self.runtime.personality);
 
@@ -599,7 +592,7 @@ where
     pub fn build_invoke_near_call_abi(
         &self,
         function: inkwell::values::FunctionValue<'ctx>,
-        args: &[inkwell::values::BasicValueEnum<'ctx>],
+        args: Vec<inkwell::values::BasicValueEnum<'ctx>>,
         name: &str,
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
         let success_block = self.append_basic_block("success_block");
@@ -651,17 +644,13 @@ where
             self.function().catch_block
         };
 
-        let call_site_value =
-            self.builder
-                .build_invoke(function, args, join_block, catch_block, name);
-
-        if function.count_params() > 0 {
-            call_site_value.add_attribute(
-                inkwell::attributes::AttributeLoc::Param(0),
-                self.llvm
-                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::ZkSync01AbiData, 0),
-            );
-        }
+        let call_site_value = self.builder.build_invoke(
+            self.runtime.near_call,
+            args.as_slice(),
+            join_block,
+            catch_block,
+            name,
+        );
 
         for index in 0..function.count_params() {
             if function

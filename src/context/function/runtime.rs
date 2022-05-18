@@ -20,7 +20,6 @@ pub struct Runtime<'ctx> {
     pub add_mod: inkwell::values::FunctionValue<'ctx>,
     /// The `__mulmod` runtime function.
     pub mul_mod: inkwell::values::FunctionValue<'ctx>,
-
     /// The `__signextend` runtime function.
     pub sign_extend: inkwell::values::FunctionValue<'ctx>,
 
@@ -37,6 +36,9 @@ pub struct Runtime<'ctx> {
     pub delegate_call: inkwell::values::FunctionValue<'ctx>,
     /// The `__mimiccall` runtime function.
     pub mimic_call: inkwell::values::FunctionValue<'ctx>,
+
+    /// The `__nearcall` runtime function.
+    pub near_call: inkwell::values::FunctionValue<'ctx>,
 }
 
 impl<'ctx> Runtime<'ctx> {
@@ -81,6 +83,9 @@ impl<'ctx> Runtime<'ctx> {
 
     /// The `mimiccall` runtime function name.
     pub const FUNCTION_MIMICCALL: &'static str = "__mimiccall";
+
+    /// The `nearcall` runtime function name.
+    pub const FUNCTION_NEARCALL: &'static str = "__nearcall";
 
     ///
     /// A shortcut constructor.
@@ -258,6 +263,21 @@ impl<'ctx> Runtime<'ctx> {
             ),
             Some(inkwell::module::Linkage::External),
         );
+        let near_call = module.add_function(
+            Self::FUNCTION_NEARCALL,
+            llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                .fn_type(
+                    &[
+                        llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                            .ptr_type(AddressSpace::Stack.into())
+                            .as_basic_type_enum(),
+                        llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                            .as_basic_type_enum(),
+                    ],
+                    true,
+                ),
+            Some(inkwell::module::Linkage::External),
+        );
 
         Self {
             personality,
@@ -275,6 +295,8 @@ impl<'ctx> Runtime<'ctx> {
             static_call,
             delegate_call,
             mimic_call,
+
+            near_call,
         }
     }
 
