@@ -34,7 +34,7 @@ where
 {
     let position = arguments[0];
     let value = arguments[1];
-    context.build_call(
+    context.build_invoke(
         context.runtime.storage_store,
         &[value, position],
         "storage_store",

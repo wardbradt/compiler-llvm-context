@@ -252,7 +252,6 @@ where
         value.set_personality_function(self.runtime.personality);
 
         let entry_block = self.llvm.append_basic_block(value, "entry");
-        let throw_block = self.llvm.append_basic_block(value, "throw");
         let catch_block = self.llvm.append_basic_block(value, "catch");
         let return_block = self.llvm.append_basic_block(value, "return");
 
@@ -260,7 +259,6 @@ where
             name.to_owned(),
             value,
             entry_block,
-            throw_block,
             catch_block,
             return_block,
             None,
@@ -494,8 +492,6 @@ where
     ///
     /// Builds a call.
     ///
-    /// Checks if there are no other terminators in the block.
-    ///
     pub fn build_call(
         &self,
         function: inkwell::values::FunctionValue<'ctx>,
@@ -538,7 +534,7 @@ where
     ///
     /// Builds an invoke.
     ///
-    /// Checks if there are no other terminators in the block.
+    /// If there is no bootloader exception handler, the behavior defaults to `build_call`.
     ///
     pub fn build_invoke(
         &self,
@@ -586,8 +582,6 @@ where
 
     ///
     /// Builds a near call ABI invoke.
-    ///
-    /// Checks if there are no other terminators in the block.
     ///
     pub fn build_invoke_near_call_abi(
         &self,
@@ -768,24 +762,16 @@ where
                 .as_basic_value_enum()],
             "landing",
         );
-        self.build_exit(
-            IntrinsicFunction::Revert,
-            self.field_const(0),
-            self.field_const(0),
+        self.build_call(
+            self.runtime.cxa_throw,
+            &[self
+                .integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Stack.into())
+                .const_null()
+                .as_basic_value_enum(); 3],
+            Runtime::FUNCTION_CXA_THROW,
         );
-        self.build_unreachable();
-    }
 
-    ///
-    /// Builds an error throwing block sequence.
-    ///
-    pub fn build_throw_block(&self) {
-        self.set_basic_block(self.function().throw_block);
-        self.build_exit(
-            IntrinsicFunction::Revert,
-            self.field_const(0),
-            self.field_const(0),
-        );
         self.build_unreachable();
     }
 

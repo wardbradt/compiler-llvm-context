@@ -17,7 +17,7 @@ pub fn add_mod<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    Ok(context.build_invoke(
+    Ok(context.build_call(
         context.runtime.add_mod,
         &[arguments[0], arguments[1], arguments[2]],
         "add_mod_call",
@@ -34,7 +34,7 @@ pub fn mul_mod<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    Ok(context.build_invoke(
+    Ok(context.build_call(
         context.runtime.mul_mod,
         &[arguments[0], arguments[1], arguments[2]],
         "mul_mod_call",
@@ -116,7 +116,7 @@ pub fn sign_extend<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    Ok(context.build_invoke(
+    Ok(context.build_call(
         context.runtime.sign_extend,
         &[arguments[0], arguments[1]],
         "sign_extend_call",

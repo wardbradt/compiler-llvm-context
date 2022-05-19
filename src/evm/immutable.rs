@@ -40,7 +40,7 @@ where
     D: Dependency,
 {
     let position = context.field_const_str(crate::hashes::keccak256(key.as_bytes()).as_str());
-    context.build_call(
+    context.build_invoke(
         context.runtime.storage_store,
         &[value.as_basic_value_enum(), position.as_basic_value_enum()],
         "immutable_store",

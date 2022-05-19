@@ -28,8 +28,6 @@ pub struct Function<'ctx> {
 
     /// The entry block.
     pub entry_block: inkwell::basic_block::BasicBlock<'ctx>,
-    /// The throw/revert block.
-    pub throw_block: inkwell::basic_block::BasicBlock<'ctx>,
     /// The catch block.
     pub catch_block: inkwell::basic_block::BasicBlock<'ctx>,
     /// The return/leave block.
@@ -66,7 +64,6 @@ impl<'ctx> Function<'ctx> {
         value: inkwell::values::FunctionValue<'ctx>,
 
         entry_block: inkwell::basic_block::BasicBlock<'ctx>,
-        throw_block: inkwell::basic_block::BasicBlock<'ctx>,
         catch_block: inkwell::basic_block::BasicBlock<'ctx>,
         return_block: inkwell::basic_block::BasicBlock<'ctx>,
 
@@ -77,7 +74,6 @@ impl<'ctx> Function<'ctx> {
             value,
 
             entry_block,
-            throw_block,
             catch_block,
             return_block,
 
@@ -98,7 +94,6 @@ impl<'ctx> Function<'ctx> {
         value: inkwell::values::FunctionValue<'ctx>,
 
         entry_block: inkwell::basic_block::BasicBlock<'ctx>,
-        throw_block: inkwell::basic_block::BasicBlock<'ctx>,
         catch_block: inkwell::basic_block::BasicBlock<'ctx>,
         return_block: inkwell::basic_block::BasicBlock<'ctx>,
 
@@ -110,7 +105,6 @@ impl<'ctx> Function<'ctx> {
             name,
             value,
             entry_block,
-            throw_block,
             catch_block,
             return_block,
             r#return,
