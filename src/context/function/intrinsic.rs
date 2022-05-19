@@ -19,6 +19,8 @@ pub enum Intrinsic {
     ToL1,
     /// The precompile call.
     Precompile,
+    /// The near call with ABI data.
+    NearCall,
 
     /// The current contract's address.
     Address,
@@ -55,6 +57,7 @@ impl Intrinsic {
             Intrinsic::Event => "llvm.syncvm.event",
             Intrinsic::ToL1 => "llvm.syncvm.tol1",
             Intrinsic::Precompile => "llvm.syncvm.precompile",
+            Intrinsic::NearCall => "llvm.syncvm.nearcall",
 
             Intrinsic::Address => "llvm.syncvm.this",
             Intrinsic::Caller => "llvm.syncvm.caller",

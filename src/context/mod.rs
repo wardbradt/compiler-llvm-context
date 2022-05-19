@@ -645,9 +645,9 @@ where
         };
 
         let call_site_value = self.builder.build_invoke(
-            self.runtime.near_call,
+            self.get_intrinsic_function(IntrinsicFunction::NearCall),
             args.as_slice(),
-            join_block,
+            success_block,
             catch_block,
             name,
         );
