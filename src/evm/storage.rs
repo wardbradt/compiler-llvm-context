@@ -17,7 +17,7 @@ where
 {
     let position = arguments[0];
     let value = context
-        .build_invoke(context.runtime.storage_load, &[position], "storage_load")
+        .build_call(context.runtime.storage_load, &[position], "storage_load")
         .expect("Contract storage always returns a value");
     Ok(Some(value))
 }
@@ -34,7 +34,7 @@ where
 {
     let position = arguments[0];
     let value = arguments[1];
-    context.build_invoke(
+    context.build_call(
         context.runtime.storage_store,
         &[value, position],
         "storage_store",
