@@ -14,6 +14,12 @@ pub struct Argument<'ctx> {
 }
 
 impl<'ctx> Argument<'ctx> {
+    /// The calldata offset argument index.
+    pub const ARGUMENT_INDEX_CALLDATA_OFFSET: usize = 0;
+
+    /// The calldata length argument index.
+    pub const ARGUMENT_INDEX_CALLDATA_LENGTH: usize = 1;
+
     ///
     /// A shortcut constructor.
     ///

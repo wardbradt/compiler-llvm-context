@@ -9,18 +9,19 @@ pub(crate) mod hashes;
 
 pub use self::context::address_space::AddressSpace;
 pub use self::context::argument::Argument;
+pub use self::context::build::Build;
 pub use self::context::code_type::CodeType;
 pub use self::context::evm_data::EVMData as ContextEVMData;
 pub use self::context::function::block::evm_data::EVMData as FunctionBlockEVMData;
 pub use self::context::function::block::key::Key as FunctionBlockKey;
 pub use self::context::function::block::Block as FunctionBlock;
-pub use self::context::function::constructor::Constructor as ConstructorFunction;
+pub use self::context::function::deploy_code::DeployCode as DeployCodeFunction;
 pub use self::context::function::entry::Entry as EntryFunction;
 pub use self::context::function::evm_data::EVMData as FunctionEVMData;
 pub use self::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 pub use self::context::function::r#return::Return as FunctionReturn;
 pub use self::context::function::runtime::Runtime;
-pub use self::context::function::selector::Selector as SelectorFunction;
+pub use self::context::function::runtime_code::RuntimeCode as RuntimeCodeFunction;
 pub use self::context::function::Function;
 pub use self::context::optimizer::Optimizer;
 pub use self::context::r#loop::Loop;
@@ -102,7 +103,7 @@ pub trait Dependency {
         optimization_level_back: inkwell::OptimizationLevel,
         run_inliner: bool,
         dump_flags: Vec<DumpFlag>,
-    ) -> anyhow::Result<String>;
+    ) -> anyhow::Result<context::build::Build>;
 
     ///
     /// Resolves a library address.

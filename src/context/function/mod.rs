@@ -3,13 +3,13 @@
 //!
 
 pub mod block;
-pub mod constructor;
+pub mod deploy_code;
 pub mod entry;
 pub mod evm_data;
 pub mod intrinsic;
 pub mod r#return;
 pub mod runtime;
-pub mod selector;
+pub mod runtime_code;
 
 use std::collections::HashMap;
 

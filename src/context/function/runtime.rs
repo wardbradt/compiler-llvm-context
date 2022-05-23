@@ -39,14 +39,14 @@ pub struct Runtime<'ctx> {
 }
 
 impl<'ctx> Runtime<'ctx> {
-    /// The LLVM contract entry function name.
+    /// The LLVM contract main entry function name.
     pub const FUNCTION_ENTRY: &'static str = "__entry";
 
-    /// The LLVM contract constructor function name.
-    pub const FUNCTION_CONSTRUCTOR: &'static str = "__constructor";
+    /// The LLVM contract deploy code function name.
+    pub const FUNCTION_DEPLOY_CODE: &'static str = "__deploy";
 
-    /// The LLVM contract selector function name.
-    pub const FUNCTION_SELECTOR: &'static str = "__selector";
+    /// The LLVM contract runtime code function name.
+    pub const FUNCTION_RUNTIME_CODE: &'static str = "__runtime";
 
     /// The LLVM personality function name.
     pub const FUNCTION_PERSONALITY: &'static str = "__personality";

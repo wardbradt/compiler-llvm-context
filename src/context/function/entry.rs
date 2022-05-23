@@ -14,7 +14,7 @@ use crate::WriteLLVM;
 ///
 /// The LLVM entry function.
 ///
-/// The function is a wrapper managing the constructor and selector calling logic.
+/// The function is a wrapper managing the runtime and deploy code calling logic.
 ///
 #[derive(Debug, Default)]
 pub struct Entry {}
@@ -26,8 +26,8 @@ impl Entry {
     /// The calldata length argument index.
     pub const ARGUMENT_INDEX_CALLDATA_LENGTH: usize = 1;
 
-    /// The constructor call flag argument index.
-    pub const ARGUMENT_INDEX_IS_CONSTRUCTOR_CALL: usize = 2;
+    /// The deploy code call flag argument index.
+    pub const ARGUMENT_INDEX_IS_DEPLOY_CALL: usize = 2;
 }
 
 impl<D> WriteLLVM<D> for Entry
@@ -62,19 +62,19 @@ where
             .ok_or_else(|| anyhow::anyhow!("Contract entry not found"))?;
         context.set_function(function);
 
-        let constructor_call_block = context.append_basic_block("constructor_call_block");
-        let selector_call_block = context.append_basic_block("selector_call_block");
+        let deploy_code_call_block = context.append_basic_block("deploy_code_call_block");
+        let runtime_code_call_block = context.append_basic_block("runtime_code_call_block");
 
-        let constructor = context
+        let deploy_code = context
             .functions
-            .get(Runtime::FUNCTION_CONSTRUCTOR)
+            .get(Runtime::FUNCTION_DEPLOY_CODE)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Contract constructor not found"))?;
-        let selector = context
+            .ok_or_else(|| anyhow::anyhow!("Contract deploy code not found"))?;
+        let runtime_code = context
             .functions
-            .get(Runtime::FUNCTION_SELECTOR)
+            .get(Runtime::FUNCTION_RUNTIME_CODE)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Contract selector not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("Contract runtime code not found"))?;
 
         context.set_basic_block(context.function().entry_block);
         let calldata_offset = context
@@ -95,24 +95,24 @@ where
             .expect("Always exists")
             .into_int_value();
         context.write_abi_data(calldata_offset, calldata_length, AddressSpace::Parent);
-        let is_constructor_call = context
+        let is_deploy_code_call = context
             .function()
             .value
-            .get_nth_param(Self::ARGUMENT_INDEX_IS_CONSTRUCTOR_CALL as u32)
+            .get_nth_param(Self::ARGUMENT_INDEX_IS_DEPLOY_CALL as u32)
             .expect("Always exists")
             .into_int_value();
         context.build_conditional_branch(
-            is_constructor_call,
-            constructor_call_block,
-            selector_call_block,
+            is_deploy_code_call,
+            deploy_code_call_block,
+            runtime_code_call_block,
         );
 
-        context.set_basic_block(constructor_call_block);
-        context.build_invoke(constructor.value, &[], "constructor_call");
+        context.set_basic_block(deploy_code_call_block);
+        context.build_invoke(deploy_code.value, &[], "deploy_code_call");
         context.build_unconditional_branch(context.function().return_block);
 
-        context.set_basic_block(selector_call_block);
-        context.build_invoke(selector.value, &[], "selector_call");
+        context.set_basic_block(runtime_code_call_block);
+        context.build_invoke(runtime_code.value, &[], "runtime_code_call");
         context.build_unconditional_branch(context.function().return_block);
 
         context.build_catch_block();

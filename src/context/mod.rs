@@ -4,6 +4,7 @@
 
 pub mod address_space;
 pub mod argument;
+pub mod build;
 pub mod code_type;
 pub mod evm_data;
 pub mod function;
@@ -19,6 +20,7 @@ use crate::dump_flag::DumpFlag;
 use crate::Dependency;
 
 use self::address_space::AddressSpace;
+use self::build::Build;
 use self::code_type::CodeType;
 use self::evm_data::EVMData;
 use self::function::evm_data::EVMData as FunctionEVMData;
@@ -49,13 +51,13 @@ where
     /// The loop context stack.
     loop_stack: Vec<Loop<'ctx>>,
 
-    /// The current contract code type, if known.
-    pub code_type: Option<CodeType>,
     /// The runtime functions.
     pub runtime: Runtime<'ctx>,
     /// The declared functions.
     pub functions: HashMap<String, Function<'ctx>>,
 
+    /// The current contract code type.
+    code_type: Option<CodeType>,
     /// The project dependency manager.
     dependency_manager: Option<&'dep mut D>,
     /// Whether to dump the specified IRs.
@@ -71,6 +73,7 @@ where
 {
     /// The functions hashmap default capacity.
     const FUNCTION_HASHMAP_INITIAL_CAPACITY: usize = 64;
+
     /// The loop stack default capacity.
     const LOOP_STACK_INITIAL_CAPACITY: usize = 16;
 
@@ -96,10 +99,10 @@ where
             function: None,
             loop_stack: Vec::with_capacity(Self::LOOP_STACK_INITIAL_CAPACITY),
 
-            code_type: None,
             runtime,
             functions: HashMap::with_capacity(Self::FUNCTION_HASHMAP_INITIAL_CAPACITY),
 
+            code_type: None,
             dependency_manager,
             dump_flags,
 
@@ -124,6 +127,80 @@ where
     }
 
     ///
+    /// Builds the LLVM module, returning the build artifacts.
+    ///
+    pub fn build(self, contract_path: &str) -> anyhow::Result<Build> {
+        if self.dump_flags.contains(&DumpFlag::LLVM) {
+            let llvm_code = self.module().print_to_string().to_string();
+            eprintln!("Contract `{}` LLVM IR unoptimized:\n", contract_path);
+            println!("{}", llvm_code);
+        }
+        self.verify().map_err(|error| {
+            anyhow::anyhow!(
+                "The contract `{}` unoptimized LLVM IR verification error: {}",
+                contract_path,
+                error
+            )
+        })?;
+        let is_optimized = self.optimize();
+        if self.dump_flags.contains(&DumpFlag::LLVM) && is_optimized {
+            let llvm_code = self.module().print_to_string().to_string();
+            eprintln!("Contract `{}` LLVM IR optimized:\n", contract_path);
+            println!("{}", llvm_code);
+        }
+        self.verify().map_err(|error| {
+            anyhow::anyhow!(
+                "The contract `{}` optimized LLVM IR verification error: {}",
+                contract_path,
+                error
+            )
+        })?;
+
+        let buffer = self
+            .target_machine()
+            .write_to_memory_buffer(self.module(), inkwell::targets::FileType::Assembly)
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "The contract `{}` assembly generating error: {}",
+                    contract_path,
+                    error
+                )
+            })?;
+
+        let assembly_text = String::from_utf8_lossy(buffer.as_slice()).to_string();
+        if self.dump_flags.contains(&DumpFlag::Assembly) {
+            eprintln!("Contract `{}` assembly:\n", contract_path);
+            println!("{}", assembly_text);
+        }
+
+        let assembly =
+            zkevm_assembly::Assembly::try_from(assembly_text.clone()).map_err(|error| {
+                anyhow::anyhow!(
+                    "The contract `{}` assembly parsing error: {}",
+                    contract_path,
+                    error
+                )
+            })?;
+
+        let bytecode: Vec<u8> = assembly
+            .clone()
+            .compile_to_bytecode()?
+            .into_iter()
+            .flatten()
+            .collect();
+
+        let hash = crate::hashes::bytecode_hash(bytecode.as_slice()).map_err(|error| {
+            anyhow::anyhow!(
+                "The contract `{}` bytecode hashing error: {}",
+                contract_path,
+                error
+            )
+        })?;
+
+        Ok(Build::new(assembly_text, assembly, bytecode, hash))
+    }
+
+    ///
     /// Returns the LLVM IR builder.
     ///
     pub fn builder(&self) -> &inkwell::builder::Builder<'ctx> {
@@ -142,6 +219,20 @@ where
     ///
     pub fn target_machine(&self) -> &inkwell::targets::TargetMachine {
         self.optimizer.target_machine()
+    }
+
+    ///
+    /// Sets the current code type.
+    ///
+    pub fn set_code_type(&mut self, code_type: CodeType) {
+        self.code_type = Some(code_type);
+    }
+
+    ///
+    /// Returns the current code type.
+    ///
+    pub fn code_type(&self) -> CodeType {
+        self.code_type.expect("Always exists")
     }
 
     ///
@@ -198,6 +289,7 @@ where
                     self.dump_flags.clone(),
                 )
             })
+            .map(|build| build.hash)
     }
 
     ///

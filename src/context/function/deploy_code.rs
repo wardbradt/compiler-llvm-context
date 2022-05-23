@@ -1,5 +1,5 @@
 //!
-//! The LLVM constructor function.
+//! The LLVM deploy code function.
 //!
 
 use std::marker::PhantomData;
@@ -11,21 +11,21 @@ use crate::Dependency;
 use crate::WriteLLVM;
 
 ///
-/// The LLVM constructor function.
+/// The LLVM deploy code function.
 ///
 #[derive(Debug)]
-pub struct Constructor<B, D>
+pub struct DeployCode<B, D>
 where
     B: WriteLLVM<D>,
     D: Dependency,
 {
-    /// The constructor AST representation.
+    /// The deploy code AST representation.
     inner: B,
     /// The `D` phantom data.
     _pd: PhantomData<D>,
 }
 
-impl<B, D> Constructor<B, D>
+impl<B, D> DeployCode<B, D>
 where
     B: WriteLLVM<D>,
     D: Dependency,
@@ -41,7 +41,7 @@ where
     }
 }
 
-impl<B, D> WriteLLVM<D> for Constructor<B, D>
+impl<B, D> WriteLLVM<D> for DeployCode<B, D>
 where
     B: WriteLLVM<D>,
     D: Dependency,
@@ -49,7 +49,7 @@ where
     fn declare(&mut self, context: &mut Context<D>) -> anyhow::Result<()> {
         let function_type = context.function_type(0, vec![]);
         context.add_function(
-            Runtime::FUNCTION_CONSTRUCTOR,
+            Runtime::FUNCTION_DEPLOY_CODE,
             function_type,
             Some(inkwell::module::Linkage::Private),
         );
@@ -60,13 +60,13 @@ where
     fn into_llvm(self, context: &mut Context<D>) -> anyhow::Result<()> {
         let function = context
             .functions
-            .get(Runtime::FUNCTION_CONSTRUCTOR)
+            .get(Runtime::FUNCTION_DEPLOY_CODE)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Contract constructor not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("Contract deploy code not found"))?;
         context.set_function(function);
 
         context.set_basic_block(context.function().entry_block);
-        context.code_type = Some(CodeType::Deploy);
+        context.set_code_type(CodeType::Deploy);
         self.inner.into_llvm(context)?;
         match context
             .basic_block()

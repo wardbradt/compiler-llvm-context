@@ -18,7 +18,7 @@ pub fn r#return<'ctx, 'dep, D>(
 where
     D: Dependency,
 {
-    match context.code_type.expect("Always exists") {
+    match context.code_type() {
         CodeType::Deploy => {
             let immutables_offset_pointer = context.access_memory(
                 context.field_const(0),

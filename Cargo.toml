@@ -17,6 +17,8 @@ sha2 = "0.10"
 sha3 = "0.10"
 md5 = "0.7"
 
+zkevm-assembly = { git = "https://github.com/matter-labs/zkEVM-assembly", branch = "v1.1.1" }
+
 compiler-common = { git = "ssh://git@github.com/matter-labs/compiler-common", branch = "az/vm-v1.1" }
 
 [dependencies.inkwell]

@@ -1,5 +1,5 @@
 //!
-//! The LLVM selector function.
+//! The LLVM runtime code function.
 //!
 
 use std::marker::PhantomData;
@@ -11,21 +11,21 @@ use crate::Dependency;
 use crate::WriteLLVM;
 
 ///
-/// The LLVM selector function.
+/// The LLVM runtime code function.
 ///
 #[derive(Debug, Default)]
-pub struct Selector<B, D>
+pub struct RuntimeCode<B, D>
 where
     B: WriteLLVM<D>,
     D: Dependency,
 {
-    /// The selector AST representation.
+    /// The runtime code AST representation.
     inner: B,
     /// The `D` phantom data.
     _pd: PhantomData<D>,
 }
 
-impl<B, D> Selector<B, D>
+impl<B, D> RuntimeCode<B, D>
 where
     B: WriteLLVM<D>,
     D: Dependency,
@@ -41,7 +41,7 @@ where
     }
 }
 
-impl<B, D> WriteLLVM<D> for Selector<B, D>
+impl<B, D> WriteLLVM<D> for RuntimeCode<B, D>
 where
     B: WriteLLVM<D>,
     D: Dependency,
@@ -49,7 +49,7 @@ where
     fn declare(&mut self, context: &mut Context<D>) -> anyhow::Result<()> {
         let function_type = context.function_type(0, vec![]);
         context.add_function(
-            Runtime::FUNCTION_SELECTOR,
+            Runtime::FUNCTION_RUNTIME_CODE,
             function_type,
             Some(inkwell::module::Linkage::Private),
         );
@@ -60,13 +60,13 @@ where
     fn into_llvm(self, context: &mut Context<D>) -> anyhow::Result<()> {
         let function = context
             .functions
-            .get(Runtime::FUNCTION_SELECTOR)
+            .get(Runtime::FUNCTION_RUNTIME_CODE)
             .cloned()
-            .ok_or_else(|| anyhow::anyhow!("Contract selector not found"))?;
+            .ok_or_else(|| anyhow::anyhow!("Contract runtime code not found"))?;
         context.set_function(function);
 
         context.set_basic_block(context.function().entry_block);
-        context.code_type = Some(CodeType::Runtime);
+        context.set_code_type(CodeType::Runtime);
         self.inner.into_llvm(context)?;
         match context
             .basic_block()

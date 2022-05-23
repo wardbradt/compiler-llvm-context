@@ -10,9 +10,9 @@
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CodeType {
-    /// The constructor (deploy) code.
+    /// The deploy code.
     Deploy,
-    /// The runtime (deployed) code.
+    /// The runtime code.
     Runtime,
 }
 
