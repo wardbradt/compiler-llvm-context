@@ -283,13 +283,10 @@ where
                 manager.compile(
                     name,
                     self.module.get_name().to_str().expect("Always valid"),
-                    self.optimizer.level_middle_end(),
-                    self.optimizer.level_back_end(),
-                    self.optimizer.is_inliner_enabled(),
+                    self.optimizer.settings().to_owned(),
                     self.dump_flags.clone(),
                 )
             })
-            .map(|build| build.hash)
     }
 
     ///

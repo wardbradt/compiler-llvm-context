@@ -7,7 +7,7 @@ use std::collections::HashMap;
 ///
 /// The LLVM module build.
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Build {
     /// The zkEVM text assembly.
     pub assembly_text: String,

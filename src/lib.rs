@@ -23,6 +23,7 @@ pub use self::context::function::r#return::Return as FunctionReturn;
 pub use self::context::function::runtime::Runtime;
 pub use self::context::function::runtime_code::RuntimeCode as RuntimeCodeFunction;
 pub use self::context::function::Function;
+pub use self::context::optimizer::settings::Settings as OptimizerSettings;
 pub use self::context::optimizer::Optimizer;
 pub use self::context::r#loop::Loop;
 pub use self::context::Context;
@@ -99,11 +100,9 @@ pub trait Dependency {
         &mut self,
         name: &str,
         parent_name: &str,
-        optimization_level_middle: inkwell::OptimizationLevel,
-        optimization_level_back: inkwell::OptimizationLevel,
-        run_inliner: bool,
+        optimizer_settings: OptimizerSettings,
         dump_flags: Vec<DumpFlag>,
-    ) -> anyhow::Result<context::build::Build>;
+    ) -> anyhow::Result<String>;
 
     ///
     /// Resolves a library address.

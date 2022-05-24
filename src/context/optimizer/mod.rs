@@ -2,6 +2,10 @@
 //! The LLVM optimizing tools.
 //!
 
+pub mod settings;
+
+use self::settings::Settings;
+
 ///
 /// The LLVM optimizing tools.
 ///
@@ -9,13 +13,8 @@
 pub struct Optimizer<'ctx> {
     /// The LLVM target machine.
     target_machine: inkwell::targets::TargetMachine,
-    /// The middle-end optimization level.
-    level_middle_end: inkwell::OptimizationLevel,
-    /// The back-end optimization level.
-    level_back_end: inkwell::OptimizationLevel,
-    /// Whether to run the inliner.
-    is_inliner_enabled: bool,
-
+    /// The optimizer settings.
+    settings: Settings,
     /// The module optimization pass manager.
     pass_manager_module: Option<inkwell::passes::PassManager<inkwell::module::Module<'ctx>>>,
     /// The function optimization pass manager.
@@ -33,11 +32,7 @@ impl<'ctx> Optimizer<'ctx> {
     ///
     /// A shortcut constructor.
     ///
-    pub fn new(
-        level_middle_end: inkwell::OptimizationLevel,
-        level_back_end: inkwell::OptimizationLevel,
-        run_inliner: bool,
-    ) -> anyhow::Result<Self> {
+    pub fn new(settings: Settings) -> anyhow::Result<Self> {
         let target_machine = inkwell::targets::Target::from_name(Self::VM_TARGET_NAME)
             .ok_or_else(|| {
                 anyhow::anyhow!("LLVM target machine `{}` not found", Self::VM_TARGET_NAME)
@@ -46,7 +41,7 @@ impl<'ctx> Optimizer<'ctx> {
                 &inkwell::targets::TargetTriple::create(Self::VM_TARGET_NAME),
                 "",
                 "",
-                level_back_end,
+                settings.level_back_end,
                 inkwell::targets::RelocMode::Default,
                 inkwell::targets::CodeModel::Default,
             )
@@ -59,9 +54,7 @@ impl<'ctx> Optimizer<'ctx> {
 
         Ok(Self {
             target_machine,
-            level_middle_end,
-            level_back_end,
-            is_inliner_enabled: run_inliner,
+            settings,
             pass_manager_module: None,
             pass_manager_function: None,
         })
@@ -75,9 +68,9 @@ impl<'ctx> Optimizer<'ctx> {
         module.set_data_layout(&self.target_machine.get_target_data().get_data_layout());
 
         let pass_manager_builder = inkwell::passes::PassManagerBuilder::create();
-        pass_manager_builder.set_optimization_level(self.level_middle_end);
+        pass_manager_builder.set_optimization_level(self.settings.level_middle_end);
         pass_manager_builder.set_disable_unroll_loops(matches!(
-            self.level_middle_end,
+            self.settings.level_middle_end,
             inkwell::OptimizationLevel::Aggressive
         ));
 
@@ -85,7 +78,7 @@ impl<'ctx> Optimizer<'ctx> {
         pass_manager_builder.populate_lto_pass_manager(
             &pass_manager_module,
             true,
-            self.is_inliner_enabled,
+            self.settings.is_inliner_enabled,
         );
         pass_manager_builder.populate_module_pass_manager(&pass_manager_module);
 
@@ -97,24 +90,10 @@ impl<'ctx> Optimizer<'ctx> {
     }
 
     ///
-    /// Returns the middle-end optimization level.
+    /// Returns the optimizer settings reference.
     ///
-    pub fn level_middle_end(&self) -> inkwell::OptimizationLevel {
-        self.level_middle_end
-    }
-
-    ///
-    /// Returns the back-end optimization level.
-    ///
-    pub fn level_back_end(&self) -> inkwell::OptimizationLevel {
-        self.level_back_end
-    }
-
-    ///
-    /// Whether the inliner is enabled.
-    ///
-    pub fn is_inliner_enabled(&self) -> bool {
-        self.is_inliner_enabled
+    pub fn settings(&self) -> &Settings {
+        &self.settings
     }
 
     ///
