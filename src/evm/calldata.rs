@@ -12,8 +12,8 @@ use crate::Dependency;
 ///
 /// Translates the calldata load.
 ///
-pub fn load<'ctx, 'dep, D>(
-    context: &mut Context<'ctx, 'dep, D>,
+pub fn load<'ctx, D>(
+    context: &mut Context<'ctx, D>,
     arguments: [inkwell::values::BasicValueEnum<'ctx>; 1],
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
@@ -43,8 +43,8 @@ where
 ///
 /// Translates the calldata size.
 ///
-pub fn size<'ctx, 'dep, D>(
-    context: &mut Context<'ctx, 'dep, D>,
+pub fn size<'ctx, D>(
+    context: &mut Context<'ctx, D>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -65,8 +65,8 @@ where
 ///
 /// Translates the calldata copy.
 ///
-pub fn copy<'ctx, 'dep, D>(
-    context: &mut Context<'ctx, 'dep, D>,
+pub fn copy<'ctx, D>(
+    context: &mut Context<'ctx, D>,
     arguments: [inkwell::values::BasicValueEnum<'ctx>; 3],
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
@@ -135,8 +135,8 @@ where
     Ok(None)
 }
 
-fn memory_zero<'ctx, 'dep, D>(
-    context: &mut Context<'ctx, 'dep, D>,
+fn memory_zero<'ctx, D>(
+    context: &mut Context<'ctx, D>,
     destination_offset: inkwell::values::IntValue<'ctx>,
     size: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
