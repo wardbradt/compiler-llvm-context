@@ -739,15 +739,14 @@ where
         {
             if let Some(return_type) = function.get_type().get_return_type() {
                 if return_type.is_pointer_type() {
-                    let return_pointer = self.builder().build_int_to_ptr(
-                        return_value.into_int_value(),
-                        return_type.ptr_type(AddressSpace::Stack.into()),
-                        format!("{}_near_call_return_pointer_casted", name).as_str(),
-                    );
-                    return_value = self.build_load(
-                        return_pointer,
-                        format!("{}_near_call_return_value_loaded", name).as_str(),
-                    );
+                    return_value = self
+                        .builder()
+                        .build_int_to_ptr(
+                            return_value.into_int_value(),
+                            return_type.into_pointer_type(),
+                            format!("{}_near_call_return_pointer_casted", name).as_str(),
+                        )
+                        .as_basic_value_enum();
                 }
             }
             self.build_store(return_pointer, return_value);
