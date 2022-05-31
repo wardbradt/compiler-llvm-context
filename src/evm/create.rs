@@ -21,10 +21,9 @@ pub fn create<'ctx, D>(
 where
     D: Dependency,
 {
-    crate::evm::check_value_zero(context, value);
-
-    let address = call_precompile(
+    let address = call_deployer_wrapped(
         context,
+        value,
         input_offset,
         input_length,
         "create(bytes32,bytes32,bytes)",
@@ -47,10 +46,9 @@ pub fn create2<'ctx, D>(
 where
     D: Dependency,
 {
-    crate::evm::check_value_zero(context, value);
-
-    let address = call_precompile(
+    let address = call_deployer_wrapped(
         context,
+        value,
         input_offset,
         input_length,
         "create2(bytes32,bytes32,bytes)",
@@ -119,10 +117,101 @@ where
 }
 
 ///
-/// Calls the `create` precompile, which returns the newly deployed contract address.
+/// The deployer call wrapper, which makes the necessary ABI tweaks if `msg.value` is not zero.
 ///
-fn call_precompile<'ctx, D>(
+fn call_deployer_wrapped<'ctx, D>(
     context: &mut Context<'ctx, D>,
+    value: inkwell::values::IntValue<'ctx>,
+    input_offset: inkwell::values::IntValue<'ctx>,
+    input_length: inkwell::values::IntValue<'ctx>,
+    signature: &'static str,
+    salt: Option<inkwell::values::IntValue<'ctx>>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let value_zero_block = context.append_basic_block("deployer_call_value_zero_block");
+    let value_non_zero_block = context.append_basic_block("deployer_call_value_non_zero_block");
+    let value_join_block = context.append_basic_block("deployer_call_value_join_block");
+
+    let address_result_pointer =
+        context.build_alloca(context.field_type(), "deployer_call_address_result_pointer");
+    context.build_store(address_result_pointer, context.field_const(0));
+    let is_value_zero = context.builder().build_int_compare(
+        inkwell::IntPredicate::EQ,
+        value,
+        context.field_const(0),
+        "deployer_call_is_value_zero",
+    );
+    context.build_conditional_branch(is_value_zero, value_zero_block, value_non_zero_block);
+
+    context.set_basic_block(value_non_zero_block);
+    let value_offset = context.builder().build_int_add(
+        input_offset,
+        input_length,
+        "contract_call_value_extra_offset",
+    );
+    let value_pointer = context.access_memory(
+        value_offset,
+        AddressSpace::Heap,
+        "contract_call_value_extra_pointer",
+    );
+    context.build_store(value_pointer, value);
+
+    let address_offset = context.builder().build_int_add(
+        value_offset,
+        context.field_const(compiler_common::SIZE_FIELD as u64),
+        "contract_call_address_extra_offset",
+    );
+    let address_pointer = context.access_memory(
+        address_offset,
+        AddressSpace::Heap,
+        "contract_call_address_extra_pointer",
+    );
+    context.build_store(
+        address_pointer,
+        context.field_const_str_hex(compiler_common::ABI_ADDRESS_CONTRACT_DEPLOYER),
+    );
+
+    let input_length_with_extra = context.builder().build_int_add(
+        input_length,
+        context.field_const((compiler_common::SIZE_FIELD * 2) as u64),
+        "contract_call_input_length_with_extra",
+    );
+    let address = call_deployer(
+        context,
+        context.field_const_str_hex(compiler_common::ABI_ADDRESS_SET_CONTEXT_VALUE_CALL),
+        input_offset,
+        input_length_with_extra,
+        signature,
+        salt,
+    )?;
+    context.build_store(address_result_pointer, address);
+    context.build_unconditional_branch(value_join_block);
+
+    context.set_basic_block(value_zero_block);
+    let address = call_deployer(
+        context,
+        context.field_const_str_hex(compiler_common::ABI_ADDRESS_CONTRACT_DEPLOYER),
+        input_offset,
+        input_length,
+        signature,
+        salt,
+    )?;
+    context.build_store(address_result_pointer, address);
+    context.build_unconditional_branch(value_join_block);
+
+    context.set_basic_block(value_join_block);
+    let address = context.build_load(address_result_pointer, "deployer_call_address_result");
+    Ok(address)
+}
+
+///
+/// Calls the deployer system contract, which returns the newly deployed contract address.
+///
+fn call_deployer<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    address: inkwell::values::IntValue<'ctx>,
     input_offset: inkwell::values::IntValue<'ctx>,
     input_length: inkwell::values::IntValue<'ctx>,
     signature: &'static str,
@@ -133,8 +222,6 @@ where
 {
     let deployer_call_success_block = context.append_basic_block("deployer_call_success_block");
     let deployer_call_join_block = context.append_basic_block("deployer_call_join_block");
-
-    let address = context.field_const_str_hex(compiler_common::ABI_ADDRESS_CONTRACT_DEPLOYER);
 
     let input_length_shifted = context.builder().build_left_shift(
         input_length,

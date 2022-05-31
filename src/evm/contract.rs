@@ -246,18 +246,28 @@ where
     }
 
     context.set_basic_block(ordinary_block);
-    if let Some(value) = value {
-        crate::evm::check_value_zero(context, value);
-    }
-    let result = call_default(
-        context,
-        function,
-        address,
-        input_offset,
-        input_length,
-        output_offset,
-        output_length,
-    )?;
+    let result = if let Some(value) = value {
+        call_default_wrapped(
+            context,
+            function,
+            value,
+            address,
+            input_offset,
+            input_length,
+            output_offset,
+            output_length,
+        )
+    } else {
+        call_default(
+            context,
+            function,
+            address,
+            input_offset,
+            input_length,
+            output_offset,
+            output_length,
+        )
+    }?;
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
 
@@ -287,6 +297,98 @@ where
             .resolve_library(path.as_str())?
             .as_basic_value_enum(),
     ))
+}
+
+///
+/// The default call wrapper, which makes the necessary ABI tweaks if `msg.value` is not zero.
+///
+#[allow(clippy::too_many_arguments)]
+fn call_default_wrapped<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    function: inkwell::values::FunctionValue<'ctx>,
+    value: inkwell::values::IntValue<'ctx>,
+    address: inkwell::values::IntValue<'ctx>,
+    input_offset: inkwell::values::IntValue<'ctx>,
+    input_length: inkwell::values::IntValue<'ctx>,
+    output_offset: inkwell::values::IntValue<'ctx>,
+    output_length: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let value_zero_block = context.append_basic_block("contract_call_value_zero_block");
+    let value_non_zero_block = context.append_basic_block("contract_call_value_non_zero_block");
+    let value_join_block = context.append_basic_block("contract_call_value_join_block");
+
+    let result_pointer =
+        context.build_alloca(context.field_type(), "contract_call_address_result_pointer");
+    context.build_store(result_pointer, context.field_const(0));
+    let is_value_zero = context.builder().build_int_compare(
+        inkwell::IntPredicate::EQ,
+        value,
+        context.field_const(0),
+        "contract_call_is_value_zero",
+    );
+    context.build_conditional_branch(is_value_zero, value_zero_block, value_non_zero_block);
+
+    context.set_basic_block(value_non_zero_block);
+    let value_offset = context.builder().build_int_add(
+        input_offset,
+        input_length,
+        "contract_call_value_extra_offset",
+    );
+    let value_pointer = context.access_memory(
+        value_offset,
+        AddressSpace::Heap,
+        "contract_call_value_extra_pointer",
+    );
+    context.build_store(value_pointer, value);
+
+    let address_offset = context.builder().build_int_add(
+        value_offset,
+        context.field_const(compiler_common::SIZE_FIELD as u64),
+        "contract_call_address_extra_offset",
+    );
+    let address_pointer = context.access_memory(
+        address_offset,
+        AddressSpace::Heap,
+        "contract_call_address_extra_pointer",
+    );
+    context.build_store(address_pointer, address);
+
+    let input_length_with_extra = context.builder().build_int_add(
+        input_length,
+        context.field_const((compiler_common::SIZE_FIELD * 2) as u64),
+        "contract_call_input_length_with_extra",
+    );
+    let result = call_default(
+        context,
+        function,
+        context.field_const_str_hex(compiler_common::ABI_ADDRESS_SET_CONTEXT_VALUE_CALL),
+        input_offset,
+        input_length_with_extra,
+        output_offset,
+        output_length,
+    )?;
+    context.build_store(result_pointer, result);
+    context.build_unconditional_branch(value_join_block);
+
+    context.set_basic_block(value_zero_block);
+    let result = call_default(
+        context,
+        function,
+        address,
+        input_offset,
+        input_length,
+        output_offset,
+        output_length,
+    )?;
+    context.build_store(result_pointer, result);
+    context.build_unconditional_branch(value_join_block);
+
+    context.set_basic_block(value_join_block);
+    let address = context.build_load(result_pointer, "contract_call_address_result");
+    Ok(address)
 }
 
 ///

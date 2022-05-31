@@ -683,7 +683,7 @@ where
         let success_block = self.append_basic_block("success_block");
         let join_block = self.append_basic_block("join_block");
 
-        let result_pointer = if let Some(r#type) = function.get_type().get_return_type() {
+        let return_pointer = if let Some(r#type) = function.get_type().get_return_type() {
             let pointer = self.build_alloca(r#type, "near_call_return_pointer");
             self.build_store(pointer, r#type.const_zero());
             Some(pointer)
@@ -691,40 +691,36 @@ where
             None
         };
 
-        let catch_block = if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX) {
-            if let Some(handler) = self
-                .functions
-                .get(Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER)
-            {
-                let current_block = self.basic_block();
-                let near_call_catch_block = self.append_basic_block("near_call_catch_block");
+        let catch_block = if let Some(handler) = self
+            .functions
+            .get(Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER)
+        {
+            let current_block = self.basic_block();
+            let near_call_catch_block = self.append_basic_block("near_call_catch_block");
 
-                self.set_basic_block(near_call_catch_block);
-                let landing_pad_type = self.structure_type(vec![
-                    self.integer_type(compiler_common::BITLENGTH_BYTE)
-                        .ptr_type(AddressSpace::Stack.into())
-                        .as_basic_type_enum(),
-                    self.integer_type(compiler_common::BITLENGTH_X32)
-                        .as_basic_type_enum(),
-                ]);
-                self.builder.build_landing_pad(
-                    landing_pad_type,
-                    self.runtime.personality,
-                    vec![self
-                        .integer_type(compiler_common::BITLENGTH_BYTE)
-                        .ptr_type(AddressSpace::Stack.into())
-                        .const_zero()
-                        .as_basic_value_enum()],
-                    "near_call_catch_landing",
-                );
-                self.build_call(handler.value, &[], "near_call_catch_call");
-                self.build_unconditional_branch(join_block);
+            self.set_basic_block(near_call_catch_block);
+            let landing_pad_type = self.structure_type(vec![
+                self.integer_type(compiler_common::BITLENGTH_BYTE)
+                    .ptr_type(AddressSpace::Stack.into())
+                    .as_basic_type_enum(),
+                self.integer_type(compiler_common::BITLENGTH_X32)
+                    .as_basic_type_enum(),
+            ]);
+            self.builder.build_landing_pad(
+                landing_pad_type,
+                self.runtime.personality,
+                vec![self
+                    .integer_type(compiler_common::BITLENGTH_BYTE)
+                    .ptr_type(AddressSpace::Stack.into())
+                    .const_zero()
+                    .as_basic_value_enum()],
+                "near_call_catch_landing",
+            );
+            self.build_call(handler.value, &[], "near_call_catch_call");
+            self.build_unconditional_branch(join_block);
 
-                self.set_basic_block(current_block);
-                near_call_catch_block
-            } else {
-                self.function().catch_block
-            }
+            self.set_basic_block(current_block);
+            near_call_catch_block
         } else {
             self.function().catch_block
         };
@@ -737,40 +733,29 @@ where
             name,
         );
 
-        for index in 0..function.count_params() {
-            if function
-                .get_nth_param(index)
-                .map(|argument| argument.get_type().is_pointer_type())
-                .unwrap_or_default()
-            {
-                call_site_value.set_alignment_attribute(
-                    inkwell::attributes::AttributeLoc::Param(index),
-                    compiler_common::SIZE_FIELD as u32,
-                );
-            }
-        }
-
-        if call_site_value
-            .try_as_basic_value()
-            .map_left(|value| value.is_pointer_value())
-            .left_or_default()
-        {
-            call_site_value.set_alignment_attribute(
-                inkwell::attributes::AttributeLoc::Return,
-                compiler_common::SIZE_FIELD as u32,
-            );
-        }
-
         self.set_basic_block(success_block);
-        if let (Some(pointer), Some(value)) =
-            (result_pointer, call_site_value.try_as_basic_value().left())
+        if let (Some(return_pointer), Some(mut return_value)) =
+            (return_pointer, call_site_value.try_as_basic_value().left())
         {
-            self.build_store(pointer, value);
+            if let Some(return_type) = function.get_type().get_return_type() {
+                if return_type.is_pointer_type() {
+                    let return_pointer = self.builder().build_int_to_ptr(
+                        return_value.into_int_value(),
+                        return_type.ptr_type(AddressSpace::Stack.into()),
+                        format!("{}_near_call_return_pointer_casted", name).as_str(),
+                    );
+                    return_value = self.build_load(
+                        return_pointer,
+                        format!("{}_near_call_return_value_loaded", name).as_str(),
+                    );
+                }
+            }
+            self.build_store(return_pointer, return_value);
         }
         self.build_unconditional_branch(join_block);
 
         self.set_basic_block(join_block);
-        result_pointer.map(|pointer| self.build_load(pointer, "near_call_result"))
+        return_pointer.map(|pointer| self.build_load(pointer, "near_call_result"))
     }
 
     ///
