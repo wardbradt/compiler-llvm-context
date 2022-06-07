@@ -311,10 +311,12 @@ where
         self.dependency_manager
             .to_owned()
             .ok_or_else(|| anyhow::anyhow!("The dependency manager is unset"))
-            .and_then(|manager| {
-                let address = manager.read().expect("Sync").resolve_library(path)?;
-                Ok(self.field_const_str(address.as_str()))
-            })
+            .map(
+                |manager| match manager.read().expect("Sync").resolve_library(path) {
+                    Ok(address) => self.field_const_str(address.as_str()),
+                    Err(_error) => self.field_const(0),
+                },
+            )
     }
 
     ///
