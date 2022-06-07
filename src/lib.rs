@@ -108,6 +108,11 @@ pub trait Dependency {
     ) -> anyhow::Result<String>;
 
     ///
+    /// Resolves a full contract path.
+    ///
+    fn resolve_path(&self, identifier: &str) -> anyhow::Result<String>;
+
+    ///
     /// Resolves a library address.
     ///
     fn resolve_library(&self, path: &str) -> anyhow::Result<String>;

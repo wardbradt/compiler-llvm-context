@@ -292,6 +292,19 @@ where
     }
 
     ///
+    /// Gets a full contract_path.
+    ///
+    pub fn resolve_path(&self, identifier: &str) -> anyhow::Result<String> {
+        self.dependency_manager
+            .to_owned()
+            .ok_or_else(|| anyhow::anyhow!("The dependency manager is unset"))
+            .and_then(|manager| {
+                let full_path = manager.read().expect("Sync").resolve_path(identifier)?;
+                Ok(full_path)
+            })
+    }
+
+    ///
     /// Gets a deployed library address.
     ///
     pub fn resolve_library(&self, path: &str) -> anyhow::Result<inkwell::values::IntValue<'ctx>> {
@@ -320,15 +333,6 @@ where
         }
 
         let value = self.module().add_function(name, r#type, linkage);
-        for index in 0..value.count_params() {
-            if value
-                .get_nth_param(index)
-                .map(|argument| argument.get_type().is_pointer_type())
-                .unwrap_or_default()
-            {
-                value.set_param_alignment(index, compiler_common::SIZE_FIELD as u32);
-            }
-        }
 
         if name.starts_with(Function::ZKSYNC_NEAR_CALL_ABI_PREFIX)
             || name == Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER
@@ -343,17 +347,9 @@ where
         value.set_personality_function(self.runtime.personality);
 
         let entry_block = self.llvm.append_basic_block(value, "entry");
-        let catch_block = self.llvm.append_basic_block(value, "catch");
         let return_block = self.llvm.append_basic_block(value, "return");
 
-        let function = Function::new(
-            name.to_owned(),
-            value,
-            entry_block,
-            catch_block,
-            return_block,
-            None,
-        );
+        let function = Function::new(name.to_owned(), value, entry_block, return_block, None);
         self.functions.insert(name.to_string(), function.clone());
     }
 
@@ -589,43 +585,16 @@ where
         args: &[inkwell::values::BasicValueEnum<'ctx>],
         name: &str,
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
-        let call_site_value = self.builder.build_call(function, args, name);
-
-        if name == Runtime::FUNCTION_CXA_THROW {
-            return call_site_value.try_as_basic_value().left();
-        }
-
-        for index in 0..function.count_params() {
-            if function
-                .get_nth_param(index)
-                .map(|argument| argument.get_type().is_pointer_type())
-                .unwrap_or_default()
-            {
-                call_site_value.set_alignment_attribute(
-                    inkwell::attributes::AttributeLoc::Param(index),
-                    compiler_common::SIZE_FIELD as u32,
-                );
-            }
-        }
-
-        if call_site_value
+        self.builder
+            .build_call(function, args, name)
             .try_as_basic_value()
-            .map_left(|value| value.is_pointer_value())
-            .left_or_default()
-        {
-            call_site_value.set_alignment_attribute(
-                inkwell::attributes::AttributeLoc::Return,
-                compiler_common::SIZE_FIELD as u32,
-            );
-        }
-
-        call_site_value.try_as_basic_value().left()
+            .left()
     }
 
     ///
     /// Builds an invoke.
     ///
-    /// If there is no bootloader exception handler, the behavior defaults to `build_call`.
+    /// Is defaulted to a call if there is no global exception handler.
     ///
     pub fn build_invoke(
         &self,
@@ -633,40 +602,133 @@ where
         args: &[inkwell::values::BasicValueEnum<'ctx>],
         name: &str,
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
-        let join_block = self.append_basic_block("join");
-
-        let call_site_value = self.builder.build_invoke(
-            function,
-            args,
-            join_block,
-            self.function().catch_block,
-            name,
-        );
-
-        for index in 0..function.count_params() {
-            if function
-                .get_nth_param(index)
-                .map(|argument| argument.get_type().is_pointer_type())
-                .unwrap_or_default()
-            {
-                call_site_value.set_alignment_attribute(
-                    inkwell::attributes::AttributeLoc::Param(index),
-                    compiler_common::SIZE_FIELD as u32,
-                );
-            }
-        }
-
-        if call_site_value
-            .try_as_basic_value()
-            .map_left(|value| value.is_pointer_value())
-            .left_or_default()
+        let handler = match self
+            .functions
+            .get(Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER)
         {
-            call_site_value.set_alignment_attribute(
-                inkwell::attributes::AttributeLoc::Return,
-                compiler_common::SIZE_FIELD as u32,
-            );
-        }
+            Some(handler) => handler.value,
+            None => {
+                return self.build_call(function, args, name);
+            }
+        };
 
+        let return_pointer = if let Some(r#type) = function.get_type().get_return_type() {
+            let pointer = self.build_alloca(r#type, "invoke_return_pointer");
+            self.build_store(pointer, r#type.const_zero());
+            Some(pointer)
+        } else {
+            None
+        };
+
+        let success_block = self.append_basic_block("invoke_success_block");
+        let catch_block = self.append_basic_block("invoke_catch_block");
+        let join_block = self.append_basic_block("invoke_join_block");
+        let current_block = self.basic_block();
+
+        self.set_basic_block(catch_block);
+        let landing_pad_type = self.structure_type(vec![
+            self.integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Stack.into())
+                .as_basic_type_enum(),
+            self.integer_type(compiler_common::BITLENGTH_X32)
+                .as_basic_type_enum(),
+        ]);
+        self.builder.build_landing_pad(
+            landing_pad_type,
+            self.runtime.personality,
+            vec![self
+                .integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Stack.into())
+                .const_zero()
+                .as_basic_value_enum()],
+            "invoke_catch_landing",
+        );
+        self.build_call(handler, &[], "invoke_catch_call");
+        self.build_unconditional_branch(join_block);
+
+        self.set_basic_block(current_block);
+        let call_site_value =
+            self.builder
+                .build_invoke(function, args, success_block, catch_block, name);
+
+        self.set_basic_block(success_block);
+        if let (Some(return_pointer), Some(mut return_value)) =
+            (return_pointer, call_site_value.try_as_basic_value().left())
+        {
+            if let Some(return_type) = function.get_type().get_return_type() {
+                if return_type.is_pointer_type() {
+                    return_value = self
+                        .builder()
+                        .build_int_to_ptr(
+                            return_value.into_int_value(),
+                            return_type.into_pointer_type(),
+                            format!("{}_invoke_return_pointer_casted", name).as_str(),
+                        )
+                        .as_basic_value_enum();
+                }
+            }
+            self.build_store(return_pointer, return_value);
+        }
+        self.build_unconditional_branch(join_block);
+
+        self.set_basic_block(join_block);
+        return_pointer.map(|pointer| self.build_load(pointer, "invoke_result"))
+    }
+
+    ///
+    /// Builds a far call ABI invoke.
+    ///
+    pub fn build_invoke_far_call(
+        &self,
+        function: inkwell::values::FunctionValue<'ctx>,
+        mut args: Vec<inkwell::values::BasicValueEnum<'ctx>>,
+        error_block: inkwell::basic_block::BasicBlock<'ctx>,
+        name: &str,
+    ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
+        let catch_block = self.append_basic_block("catch_block");
+        let join_block = self.append_basic_block("join_block");
+        let current_block = self.basic_block();
+
+        let result_type = self
+            .structure_type(vec![
+                self.integer_type(compiler_common::BITLENGTH_FIELD)
+                    .as_basic_type_enum(),
+                self.integer_type(compiler_common::BITLENGTH_BOOLEAN)
+                    .as_basic_type_enum(),
+            ])
+            .as_basic_type_enum();
+        let result_pointer = self.build_alloca(result_type, "mimic_call_result_pointer");
+        args.push(result_pointer.as_basic_value_enum());
+
+        self.set_basic_block(catch_block);
+        let landing_pad_type = self.structure_type(vec![
+            self.integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Stack.into())
+                .as_basic_type_enum(),
+            self.integer_type(compiler_common::BITLENGTH_X32)
+                .as_basic_type_enum(),
+        ]);
+        self.builder.build_landing_pad(
+            landing_pad_type,
+            self.runtime.personality,
+            vec![self
+                .integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Stack.into())
+                .const_zero()
+                .as_basic_value_enum()],
+            "landing",
+        );
+        self.write_abi_data(
+            self.field_const(0),
+            self.field_const(0),
+            AddressSpace::Child,
+        );
+        self.build_unconditional_branch(error_block);
+
+        self.set_basic_block(current_block);
+        let call_site_value =
+            self.builder
+                .build_invoke(function, args.as_slice(), join_block, catch_block, name);
         self.set_basic_block(join_block);
         call_site_value.try_as_basic_value().left()
     }
@@ -680,8 +742,7 @@ where
         args: Vec<inkwell::values::BasicValueEnum<'ctx>>,
         name: &str,
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
-        let success_block = self.append_basic_block("success_block");
-        let join_block = self.append_basic_block("join_block");
+        let join_block = self.append_basic_block("near_call_join_block");
 
         let return_pointer = if let Some(r#type) = function.get_type().get_return_type() {
             let pointer = self.build_alloca(r#type, "near_call_return_pointer");
@@ -691,14 +752,15 @@ where
             None
         };
 
-        let catch_block = if let Some(handler) = self
+        let call_site_value = if let Some(handler) = self
             .functions
             .get(Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER)
         {
+            let success_block = self.append_basic_block("near_call_success_block");
+            let catch_block = self.append_basic_block("near_call_catch_block");
             let current_block = self.basic_block();
-            let near_call_catch_block = self.append_basic_block("near_call_catch_block");
 
-            self.set_basic_block(near_call_catch_block);
+            self.set_basic_block(catch_block);
             let landing_pad_type = self.structure_type(vec![
                 self.integer_type(compiler_common::BITLENGTH_BYTE)
                     .ptr_type(AddressSpace::Stack.into())
@@ -720,20 +782,23 @@ where
             self.build_unconditional_branch(join_block);
 
             self.set_basic_block(current_block);
-            near_call_catch_block
+            let call_site_value = self.builder.build_invoke(
+                self.get_intrinsic_function(IntrinsicFunction::NearCall),
+                args.as_slice(),
+                success_block,
+                catch_block,
+                name,
+            );
+            self.set_basic_block(success_block);
+            call_site_value
         } else {
-            self.function().catch_block
+            self.builder.build_call(
+                self.get_intrinsic_function(IntrinsicFunction::NearCall),
+                args.as_slice(),
+                name,
+            )
         };
 
-        let call_site_value = self.builder.build_invoke(
-            self.get_intrinsic_function(IntrinsicFunction::NearCall),
-            args.as_slice(),
-            success_block,
-            catch_block,
-            name,
-        );
-
-        self.set_basic_block(success_block);
         if let (Some(return_pointer), Some(mut return_value)) =
             (return_pointer, call_site_value.try_as_basic_value().left())
         {
@@ -813,41 +878,6 @@ where
         }
 
         self.builder.build_unreachable();
-    }
-
-    ///
-    /// Builds an exception catching block sequence.
-    ///
-    pub fn build_catch_block(&self) {
-        self.set_basic_block(self.function().catch_block);
-        let landing_pad_type = self.structure_type(vec![
-            self.integer_type(compiler_common::BITLENGTH_BYTE)
-                .ptr_type(AddressSpace::Stack.into())
-                .as_basic_type_enum(),
-            self.integer_type(compiler_common::BITLENGTH_X32)
-                .as_basic_type_enum(),
-        ]);
-        self.builder.build_landing_pad(
-            landing_pad_type,
-            self.runtime.personality,
-            vec![self
-                .integer_type(compiler_common::BITLENGTH_BYTE)
-                .ptr_type(AddressSpace::Stack.into())
-                .const_zero()
-                .as_basic_value_enum()],
-            "landing",
-        );
-        self.build_call(
-            self.runtime.cxa_throw,
-            &[self
-                .integer_type(compiler_common::BITLENGTH_BYTE)
-                .ptr_type(AddressSpace::Stack.into())
-                .const_null()
-                .as_basic_value_enum(); 3],
-            Runtime::FUNCTION_CXA_THROW,
-        );
-
-        self.build_unreachable();
     }
 
     ///
@@ -1011,6 +1041,21 @@ where
             "length_pointer",
         );
         self.build_store(length_pointer, length);
+    }
+
+    ///
+    /// Returns an integer type constant.
+    ///
+    pub fn bool_const(&self, value: bool) -> inkwell::values::IntValue<'ctx> {
+        self.integer_type(compiler_common::BITLENGTH_BOOLEAN)
+            .const_int(if value { 1 } else { 0 }, false)
+    }
+
+    ///
+    /// Returns an integer type constant.
+    ///
+    pub fn integer_const(&self, bitlength: usize, value: u64) -> inkwell::values::IntValue<'ctx> {
+        self.integer_type(bitlength).const_int(value, false)
     }
 
     ///

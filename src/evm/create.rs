@@ -2,7 +2,6 @@
 //! Translates the contract creation instructions.
 //!
 
-use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
 use crate::context::Context;
@@ -84,7 +83,8 @@ where
 {
     let parent = context.module().get_name().to_str().expect("Always valid");
 
-    if identifier.ends_with("_deployed") || identifier.as_str() == parent {
+    let contract_path = context.resolve_path(identifier.as_str())?;
+    if identifier.ends_with("_deployed") || contract_path.as_str() == parent {
         return Ok(Some(context.field_const(0).as_basic_value_enum()));
     }
 
@@ -101,6 +101,9 @@ where
 /// - the deployer contract method signature
 /// - the salt if the call is `create2`, or zero if the call is `create1`
 /// - the hash of the bytecode of the contract whose instance is being created
+/// - the passed Ether value
+/// - the offset of the constructor arguments
+/// - the length of the constructor arguments
 ///
 /// If the call is `create1`, the space for the salt is still allocated, because the memory for the
 /// header is allocated before it is known which version of `create` is going to be used.
@@ -116,7 +119,8 @@ where
 {
     let parent = context.module().get_name().to_str().expect("Always valid");
 
-    if identifier.ends_with("_deployed") || identifier.as_str() == parent {
+    let contract_path = context.resolve_path(identifier.as_str())?;
+    if identifier.ends_with("_deployed") || contract_path.as_str() == parent {
         return Ok(Some(context.field_const(0).as_basic_value_enum()));
     }
 
@@ -141,8 +145,8 @@ fn call_deployer<'ctx, D>(
 where
     D: Dependency,
 {
-    let deployer_call_success_block = context.append_basic_block("deployer_call_success_block");
-    let deployer_call_join_block = context.append_basic_block("deployer_call_join_block");
+    let success_block = context.append_basic_block("deployer_call_success_block");
+    let join_block = context.append_basic_block("deployer_call_join_block");
 
     let input_length_shifted = context.builder().build_left_shift(
         input_length,
@@ -223,35 +227,26 @@ where
     );
     context.build_store(arguments_length_pointer, arguments_length_value);
 
-    let result_type = context
-        .structure_type(vec![
-            context
-                .integer_type(compiler_common::BITLENGTH_FIELD)
-                .as_basic_type_enum(),
-            context
-                .integer_type(compiler_common::BITLENGTH_BOOLEAN)
-                .as_basic_type_enum(),
-        ])
-        .as_basic_type_enum();
-    let result_pointer = context.build_alloca(result_type, "deployer_call_result_pointer");
+    let result_pointer = context.build_alloca(context.field_type(), "deployer_call_result_pointer");
+    context.build_store(result_pointer, context.field_const(0));
 
-    let result_pointer = context
-        .build_invoke(
+    let far_call_result_pointer = context
+        .build_invoke_far_call(
             context.runtime.far_call,
-            &[
+            vec![
                 context
                     .field_const_str(compiler_common::ABI_ADDRESS_CONTRACT_DEPLOYER)
                     .as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
-                result_pointer.as_basic_value_enum(),
             ],
+            join_block,
             "deployer_call",
         )
         .expect("Always returns a value");
 
     let result_abi_data_pointer = unsafe {
         context.builder().build_gep(
-            result_pointer.into_pointer_value(),
+            far_call_result_pointer.into_pointer_value(),
             &[
                 context.field_const(0),
                 context
@@ -283,7 +278,7 @@ where
 
     let result_status_code_pointer = unsafe {
         context.builder().build_gep(
-            result_pointer.into_pointer_value(),
+            far_call_result_pointer.into_pointer_value(),
             &[
                 context.field_const(0),
                 context
@@ -297,25 +292,23 @@ where
         result_status_code_pointer,
         "deployer_call_result_status_code_boolean",
     );
-    let return_pointer = context.build_alloca(context.field_type(), "deployer_call_return_pointer");
-    context.build_store(return_pointer, context.field_const(0));
     context.build_conditional_branch(
         result_status_code_boolean.into_int_value(),
-        deployer_call_success_block,
-        deployer_call_join_block,
+        success_block,
+        join_block,
     );
 
-    context.set_basic_block(deployer_call_success_block);
+    context.set_basic_block(success_block);
     let child_data_pointer = context.access_memory(
         child_data_offset,
         AddressSpace::Child,
         "deployer_call_child_pointer",
     );
     let child_data_value = context.build_load(child_data_pointer, "deployer_call_child_address");
-    context.build_store(return_pointer, child_data_value);
-    context.build_unconditional_branch(deployer_call_join_block);
+    context.build_store(result_pointer, child_data_value);
+    context.build_unconditional_branch(join_block);
 
-    context.set_basic_block(deployer_call_join_block);
-    let result = context.build_load(return_pointer, "deployer_call_result");
+    context.set_basic_block(join_block);
+    let result = context.build_load(result_pointer, "deployer_call_result");
     Ok(result)
 }

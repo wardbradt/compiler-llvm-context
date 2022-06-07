@@ -2,7 +2,6 @@
 //! Translates a contract call.
 //!
 
-use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
 use crate::context::address_space::AddressSpace;
@@ -405,6 +404,14 @@ fn call_default<'ctx, D>(
 where
     D: Dependency,
 {
+    let join_block = context.append_basic_block("contract_call_join_block");
+
+    let status_code_result_pointer = context.build_alloca(
+        context.field_type(),
+        "contract_call_result_status_code_pointer",
+    );
+    context.build_store(status_code_result_pointer, context.field_const(0));
+
     let input_length_shifted = context.builder().build_left_shift(
         input_length,
         context.field_const(compiler_common::BITLENGTH_X64 as u64),
@@ -416,26 +423,14 @@ where
         "contract_call_abi_data",
     );
 
-    let result_type = context
-        .structure_type(vec![
-            context
-                .integer_type(compiler_common::BITLENGTH_FIELD)
-                .as_basic_type_enum(),
-            context
-                .integer_type(compiler_common::BITLENGTH_BOOLEAN)
-                .as_basic_type_enum(),
-        ])
-        .as_basic_type_enum();
-    let result_pointer = context.build_alloca(result_type, "contract_call_result_pointer");
-
     let result_pointer = context
-        .build_invoke(
+        .build_invoke_far_call(
             function,
-            &[
+            vec![
                 address.as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
-                result_pointer.as_basic_value_enum(),
             ],
+            join_block,
             "contract_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
@@ -478,6 +473,7 @@ where
         context.field_type(),
         "contract_call_external_result_status_code",
     );
+    context.build_store(status_code_result_pointer, result_status_code);
 
     let child_data_offset = context.builder().build_and(
         result_abi_data.into_int_value(),
@@ -516,8 +512,12 @@ where
     );
 
     context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
+    context.build_unconditional_branch(join_block);
 
-    Ok(result_status_code.as_basic_value_enum())
+    context.set_basic_block(join_block);
+    let status_code_result =
+        context.build_load(status_code_result_pointer, "contract_call_status_code");
+    Ok(status_code_result)
 }
 
 ///
@@ -533,34 +533,30 @@ fn call_mimic<'ctx, D>(
 where
     D: Dependency,
 {
-    let result_type = context
-        .structure_type(vec![
-            context
-                .integer_type(compiler_common::BITLENGTH_FIELD)
-                .as_basic_type_enum(),
-            context
-                .integer_type(compiler_common::BITLENGTH_BOOLEAN)
-                .as_basic_type_enum(),
-        ])
-        .as_basic_type_enum();
-    let result_pointer = context.build_alloca(result_type, "mimic_call_result_pointer");
+    let join_block = context.append_basic_block("mimic_call_join_block");
 
-    let result_pointer = context
-        .build_invoke(
+    let status_code_result_pointer = context.build_alloca(
+        context.field_type(),
+        "mimic_call_result_status_code_pointer",
+    );
+    context.build_store(status_code_result_pointer, context.field_const(0));
+
+    let far_call_result_pointer = context
+        .build_invoke_far_call(
             function,
-            &[
+            vec![
                 address.as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
                 mimic.as_basic_value_enum(),
-                result_pointer.as_basic_value_enum(),
             ],
+            join_block,
             "mimic_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
 
     let result_abi_data_pointer = unsafe {
         context.builder().build_gep(
-            result_pointer.into_pointer_value(),
+            far_call_result_pointer.into_pointer_value(),
             &[
                 context.field_const(0),
                 context
@@ -577,7 +573,7 @@ where
 
     let result_status_code_pointer = unsafe {
         context.builder().build_gep(
-            result_pointer.into_pointer_value(),
+            far_call_result_pointer.into_pointer_value(),
             &[
                 context.field_const(0),
                 context
@@ -596,6 +592,7 @@ where
         context.field_type(),
         "mimic_call_external_result_status_code",
     );
+    context.build_store(status_code_result_pointer, result_status_code);
 
     let child_data_offset = context.builder().build_and(
         result_abi_data.into_int_value(),
@@ -615,8 +612,12 @@ where
     );
 
     context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
+    context.build_unconditional_branch(join_block);
 
-    Ok(result_status_code.as_basic_value_enum())
+    context.set_basic_block(join_block);
+    let status_code_result =
+        context.build_load(status_code_result_pointer, "mimic_call_status_code");
+    Ok(status_code_result)
 }
 
 ///
@@ -633,33 +634,29 @@ fn call_system<'ctx, D>(
 where
     D: Dependency,
 {
-    let result_type = context
-        .structure_type(vec![
-            context
-                .integer_type(compiler_common::BITLENGTH_FIELD)
-                .as_basic_type_enum(),
-            context
-                .integer_type(compiler_common::BITLENGTH_BOOLEAN)
-                .as_basic_type_enum(),
-        ])
-        .as_basic_type_enum();
-    let result_pointer = context.build_alloca(result_type, "system_far_call_result_pointer");
+    let join_block = context.append_basic_block("system_far_call_join_block");
 
-    let result_pointer = context
-        .build_invoke(
+    let status_code_result_pointer = context.build_alloca(
+        context.field_type(),
+        "system_far_call_result_status_code_pointer",
+    );
+    context.build_store(status_code_result_pointer, context.field_const(0));
+
+    let far_call_result_pointer = context
+        .build_invoke_far_call(
             function,
-            &[
+            vec![
                 address.as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
-                result_pointer.as_basic_value_enum(),
             ],
+            join_block,
             "system_far_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
 
     let result_abi_data_pointer = unsafe {
         context.builder().build_gep(
-            result_pointer.into_pointer_value(),
+            far_call_result_pointer.into_pointer_value(),
             &[
                 context.field_const(0),
                 context
@@ -676,7 +673,7 @@ where
 
     let result_status_code_pointer = unsafe {
         context.builder().build_gep(
-            result_pointer.into_pointer_value(),
+            far_call_result_pointer.into_pointer_value(),
             &[
                 context.field_const(0),
                 context
@@ -695,6 +692,7 @@ where
         context.field_type(),
         "system_far_call_external_result_status_code",
     );
+    context.build_store(status_code_result_pointer, result_status_code);
 
     let child_data_offset = context.builder().build_and(
         result_abi_data.into_int_value(),
@@ -733,8 +731,12 @@ where
     );
 
     context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
+    context.build_unconditional_branch(join_block);
 
-    Ok(result_status_code.as_basic_value_enum())
+    context.set_basic_block(join_block);
+    let status_code_result =
+        context.build_load(status_code_result_pointer, "system_call_status_code");
+    Ok(status_code_result)
 }
 
 ///

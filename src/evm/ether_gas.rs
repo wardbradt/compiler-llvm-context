@@ -104,7 +104,7 @@ where
     let result_pointer = context.build_alloca(result_type, "balance_call_result_pointer");
 
     let result_pointer = context
-        .build_invoke(
+        .build_call(
             context.runtime.static_call,
             &[
                 context

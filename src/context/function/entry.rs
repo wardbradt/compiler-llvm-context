@@ -115,8 +115,6 @@ where
         context.build_invoke(runtime_code.value, &[], "runtime_code_call");
         context.build_unconditional_branch(context.function().return_block);
 
-        context.build_catch_block();
-
         context.set_basic_block(context.function().return_block);
         let return_value = context
             .read_abi_data(AddressSpace::Parent)
