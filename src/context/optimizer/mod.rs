@@ -68,11 +68,13 @@ impl<'ctx> Optimizer<'ctx> {
         module.set_data_layout(&self.target_machine.get_target_data().get_data_layout());
 
         let pass_manager_builder = inkwell::passes::PassManagerBuilder::create();
-        pass_manager_builder.set_optimization_level(self.settings.level_middle_end);
-        pass_manager_builder.set_disable_unroll_loops(matches!(
-            self.settings.level_middle_end,
-            inkwell::OptimizationLevel::Aggressive
-        ));
+        let size_level: u32 = self.settings.level_middle_end_size.into();
+        if size_level > 0 {
+            pass_manager_builder.set_size_level(size_level);
+        } else {
+            pass_manager_builder.set_optimization_level(self.settings.level_middle_end);
+        }
+        pass_manager_builder.set_disable_unroll_loops(true);
 
         let pass_manager_module = inkwell::passes::PassManager::create(());
         pass_manager_builder.populate_lto_pass_manager(

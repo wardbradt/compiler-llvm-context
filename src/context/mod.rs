@@ -604,15 +604,12 @@ where
         args: &[inkwell::values::BasicValueEnum<'ctx>],
         name: &str,
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
-        let handler = match self
+        if !self
             .functions
-            .get(Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER)
+            .contains_key(Function::ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER)
         {
-            Some(handler) => handler.value,
-            None => {
-                return self.build_call(function, args, name);
-            }
-        };
+            return self.build_call(function, args, name);
+        }
 
         let return_pointer = if let Some(r#type) = function.get_type().get_return_type() {
             let pointer = self.build_alloca(r#type, "invoke_return_pointer");
@@ -624,7 +621,6 @@ where
 
         let success_block = self.append_basic_block("invoke_success_block");
         let catch_block = self.append_basic_block("invoke_catch_block");
-        let join_block = self.append_basic_block("invoke_join_block");
         let current_block = self.basic_block();
 
         self.set_basic_block(catch_block);
@@ -645,8 +641,16 @@ where
                 .as_basic_value_enum()],
             "invoke_catch_landing",
         );
-        self.build_call(handler, &[], "invoke_catch_call");
-        self.build_unconditional_branch(join_block);
+        self.build_call(
+            self.runtime.cxa_throw,
+            &[self
+                .integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Stack.into())
+                .const_null()
+                .as_basic_value_enum(); 3],
+            Runtime::FUNCTION_CXA_THROW,
+        );
+        self.build_unreachable();
 
         self.set_basic_block(current_block);
         let call_site_value =
@@ -671,9 +675,6 @@ where
             }
             self.build_store(return_pointer, return_value);
         }
-        self.build_unconditional_branch(join_block);
-
-        self.set_basic_block(join_block);
         return_pointer.map(|pointer| self.build_load(pointer, "invoke_result"))
     }
 

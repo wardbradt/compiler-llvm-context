@@ -23,6 +23,7 @@ pub use self::context::function::r#return::Return as FunctionReturn;
 pub use self::context::function::runtime::Runtime;
 pub use self::context::function::runtime_code::RuntimeCode as RuntimeCodeFunction;
 pub use self::context::function::Function;
+pub use self::context::optimizer::settings::size_level::SizeLevel as OptimizerSettingsSizeLevel;
 pub use self::context::optimizer::settings::Settings as OptimizerSettings;
 pub use self::context::optimizer::Optimizer;
 pub use self::context::r#loop::Loop;
