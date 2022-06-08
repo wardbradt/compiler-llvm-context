@@ -18,6 +18,11 @@ pub mod r#return;
 pub mod return_data;
 pub mod storage;
 
+use std::str::FromStr;
+
+use num::BigUint;
+use num::Num;
+
 use crate::context::address_space::AddressSpace;
 use crate::context::Context;
 use crate::Dependency;
@@ -73,4 +78,32 @@ where
     context.build_store(address_saved_data_pointer, address_saved_data);
 
     Ok(None)
+}
+
+///
+/// Parses an address and returns its BigUint representation.
+///
+/// # Panics
+/// If the `address` is invalid
+///
+pub fn parse_address(address: &str) -> BigUint {
+    let address = address.strip_prefix("0x").unwrap_or(address);
+    BigUint::from_str_radix(address, compiler_common::BASE_HEXADECIMAL as u32)
+        .expect("Always valid")
+}
+
+///
+/// Parses an LLVM constant and returns its BigUint representation.
+///
+/// # Panics
+/// If the LLVM notation is invalid
+///
+pub fn parse_llvm_constant(value: inkwell::values::IntValue) -> Option<BigUint> {
+    let debug_string = format!("{:?}", value);
+    let value_match = regex::Regex::new(r#"i256\s[0-9]+"#)
+        .expect("Always valid")
+        .captures(debug_string.as_str())?
+        .get(0)?;
+    let value_string = value_match.as_str().split(' ').last()?;
+    Some(BigUint::from_str(value_string).expect("Always valid"))
 }

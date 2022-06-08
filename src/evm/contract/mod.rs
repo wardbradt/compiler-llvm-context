@@ -2,6 +2,8 @@
 //! Translates a contract call.
 //!
 
+pub mod simulation;
+
 use inkwell::values::BasicValue;
 
 use crate::context::address_space::AddressSpace;
@@ -28,14 +30,66 @@ pub fn call<'ctx, D>(
 where
     D: Dependency,
 {
+    if let Some(address_simulation) = crate::evm::parse_llvm_constant(address) {
+        if crate::evm::parse_address(compiler_common::ABI_ADDRESS_TO_L1) == address_simulation {
+            let is_first = gas;
+            let in_0 = value.unwrap_or_else(|| context.field_const(0));
+            let in_1 = input_offset;
+            return simulation::to_l1(context, is_first, in_0, in_1).map(Some);
+        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_CODE_ADDRESS)
+            == address_simulation
+        {
+            return simulation::code_source(context).map(Some);
+        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_PRECOMPILE)
+            == address_simulation
+        {
+            let in_0 = gas;
+            let ergs_left = input_offset;
+
+            return simulation::precompile(context, in_0, ergs_left).map(Some);
+        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_META) == address_simulation
+        {
+            return simulation::meta(context).map(Some);
+        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_MIMIC_CALL)
+            == address_simulation
+        {
+            let address = gas;
+            let mimic = value.unwrap_or_else(|| context.field_const(0));
+            let abi_data = input_offset;
+
+            return call_mimic(
+                context,
+                context.runtime.mimic_call,
+                address,
+                mimic,
+                abi_data,
+            )
+            .map(Some);
+        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_SYSTEM_CALL)
+            == address_simulation
+        {
+            let address = gas;
+            let abi_data = input_offset;
+
+            return simulation::system_call(
+                context,
+                address,
+                abi_data,
+                input_length,
+                output_offset,
+                output_length,
+            )
+            .map(Some);
+        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_SET_CONTEXT_VALUE_CALL)
+            == address_simulation
+        {
+            let value = value.unwrap_or_else(|| context.field_const(0));
+
+            return simulation::set_context_value(context, value).map(Some);
+        }
+    }
+
     let identity_block = context.append_basic_block("contract_call_identity_block");
-    let tol1_block = context.append_basic_block("contract_call_toL1_block");
-    let code_source_block = context.append_basic_block("contract_call_code_source_block");
-    let precompile_block = context.append_basic_block("contract_call_precompile_block");
-    let meta_block = context.append_basic_block("contract_call_meta_block");
-    let mimic_call_block = context.append_basic_block("contract_call_mimic_call_block");
-    let system_call_block = context.append_basic_block("contract_call_system_call_block");
-    let set_context_value_block = context.append_basic_block("contract_call_msg_value_block");
     let ordinary_block = context.append_basic_block("contract_call_ordinary_block");
     let join_block = context.append_basic_block("contract_call_join_block");
 
@@ -45,219 +99,16 @@ where
     context.builder().build_switch(
         address,
         ordinary_block,
-        &[
-            (
-                context.field_const_str(compiler_common::SOLIDITY_ADDRESS_IDENTITY),
-                identity_block,
-            ),
-            (
-                context.field_const_str(compiler_common::ABI_ADDRESS_TO_L1),
-                tol1_block,
-            ),
-            (
-                context.field_const_str(compiler_common::ABI_ADDRESS_CODE_ADDRESS),
-                code_source_block,
-            ),
-            (
-                context.field_const_str(compiler_common::ABI_ADDRESS_PRECOMPILE),
-                precompile_block,
-            ),
-            (
-                context.field_const_str(compiler_common::ABI_ADDRESS_META),
-                meta_block,
-            ),
-            (
-                context.field_const_str(compiler_common::ABI_ADDRESS_MIMIC_CALL),
-                mimic_call_block,
-            ),
-            (
-                context.field_const_str(compiler_common::ABI_ADDRESS_SYSTEM_CALL),
-                system_call_block,
-            ),
-            (
-                context.field_const_str(compiler_common::ABI_ADDRESS_SET_CONTEXT_VALUE_CALL),
-                set_context_value_block,
-            ),
-        ],
+        &[(
+            context.field_const_str(compiler_common::SOLIDITY_ADDRESS_IDENTITY),
+            identity_block,
+        )],
     );
 
     {
         context.set_basic_block(identity_block);
         let result = call_identity(context, output_offset, input_offset, output_length)?;
         context.build_store(result_pointer, result);
-        context.build_unconditional_branch(join_block);
-    }
-
-    {
-        context.set_basic_block(tol1_block);
-        let in_0 = value.unwrap_or_else(|| context.field_const(0));
-        let in_1 = input_offset;
-
-        let contract_call_tol1_is_first_block =
-            context.append_basic_block("contract_call_toL1_is_first_block");
-        let contract_call_tol1_is_not_first_block =
-            context.append_basic_block("contract_call_toL1_is_not_first_block");
-
-        let is_first = gas;
-        let is_first_equals_zero = context.builder().build_int_compare(
-            inkwell::IntPredicate::EQ,
-            is_first,
-            context.field_const(0),
-            "contract_call_toL1_is_first_equals_zero",
-        );
-        context.build_conditional_branch(
-            is_first_equals_zero,
-            contract_call_tol1_is_not_first_block,
-            contract_call_tol1_is_first_block,
-        );
-
-        {
-            context.set_basic_block(contract_call_tol1_is_not_first_block);
-            let is_first = context.field_const(0);
-            context.build_call(
-                context.get_intrinsic_function(IntrinsicFunction::ToL1),
-                &[
-                    in_0.as_basic_value_enum(),
-                    in_1.as_basic_value_enum(),
-                    is_first.as_basic_value_enum(),
-                ],
-                "contract_call_simulation_tol1",
-            );
-            context.build_unconditional_branch(join_block);
-        }
-
-        {
-            context.set_basic_block(contract_call_tol1_is_first_block);
-            let is_first = context.field_const(1);
-            context.build_call(
-                context.get_intrinsic_function(IntrinsicFunction::ToL1),
-                &[
-                    in_0.as_basic_value_enum(),
-                    in_1.as_basic_value_enum(),
-                    is_first.as_basic_value_enum(),
-                ],
-                "contract_call_simulation_tol1",
-            );
-            context.build_unconditional_branch(join_block);
-        }
-    }
-
-    {
-        context.set_basic_block(code_source_block);
-        let result = context
-            .build_call(
-                context.get_intrinsic_function(IntrinsicFunction::CodeSource),
-                &[],
-                "contract_call_simulation_code_source",
-            )
-            .expect("Always exists");
-        context.build_store(result_pointer, result);
-        context.build_unconditional_branch(join_block);
-    }
-
-    {
-        context.set_basic_block(precompile_block);
-        let in_0 = gas;
-        let ergs_left = input_offset;
-        let result = context
-            .build_call(
-                context.get_intrinsic_function(IntrinsicFunction::Precompile),
-                &[in_0.as_basic_value_enum(), ergs_left.as_basic_value_enum()],
-                "contract_call_simulation_precompile",
-            )
-            .expect("Always exists");
-        context.build_store(result_pointer, result);
-        context.build_unconditional_branch(join_block);
-    }
-
-    {
-        context.set_basic_block(meta_block);
-        let result = context
-            .build_call(
-                context.get_intrinsic_function(IntrinsicFunction::Meta),
-                &[],
-                "contract_call_simulation_meta",
-            )
-            .expect("Always exists");
-        context.build_store(result_pointer, result);
-        context.build_unconditional_branch(join_block);
-    }
-
-    {
-        context.set_basic_block(mimic_call_block);
-        let address = gas;
-        let mimic = value.unwrap_or_else(|| context.field_const(0));
-        let abi_data = input_offset;
-        let result = call_mimic(
-            context,
-            context.runtime.mimic_call,
-            address,
-            mimic,
-            abi_data,
-        )?;
-        context.build_store(result_pointer, result);
-        context.build_unconditional_branch(join_block);
-    }
-
-    {
-        context.set_basic_block(system_call_block);
-        let address = gas;
-        let abi_data = input_offset;
-
-        let system_far_call_block = context.append_basic_block("system_far_call_block");
-        let system_delegate_call_block = context.append_basic_block("system_delegate_call_block");
-
-        let is_delegate = input_length;
-        let is_delegate_equals_zero = context.builder().build_int_compare(
-            inkwell::IntPredicate::EQ,
-            is_delegate,
-            context.field_const(0),
-            "system_far_call_is_delegate_equals_zero",
-        );
-        context.build_conditional_branch(
-            is_delegate_equals_zero,
-            system_far_call_block,
-            system_delegate_call_block,
-        );
-
-        {
-            context.set_basic_block(system_far_call_block);
-            let result = call_system(
-                context,
-                context.runtime.far_call,
-                address,
-                abi_data,
-                output_offset,
-                output_length,
-            )?;
-            context.build_store(result_pointer, result);
-            context.build_unconditional_branch(join_block);
-        }
-
-        {
-            context.set_basic_block(system_delegate_call_block);
-            let result = call_system(
-                context,
-                context.runtime.delegate_call,
-                address,
-                abi_data,
-                output_offset,
-                output_length,
-            )?;
-            context.build_store(result_pointer, result);
-            context.build_unconditional_branch(join_block);
-        }
-    }
-
-    {
-        context.set_basic_block(set_context_value_block);
-        let value = value.unwrap_or_else(|| context.field_const(0));
-
-        context.build_call(
-            context.get_intrinsic_function(IntrinsicFunction::SetU128),
-            &[value.as_basic_value_enum()],
-            "contract_call_simulation_set_context_value",
-        );
         context.build_unconditional_branch(join_block);
     }
 
@@ -521,6 +372,36 @@ where
 }
 
 ///
+/// Generates a memcopy call for the `Identity` precompile.
+///
+fn call_identity<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    destination: inkwell::values::IntValue<'ctx>,
+    source: inkwell::values::IntValue<'ctx>,
+    size: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let destination = context.access_memory(
+        destination,
+        AddressSpace::Heap,
+        "contract_call_identity_destination",
+    );
+    let source = context.access_memory(source, AddressSpace::Heap, "contract_call_identity_source");
+
+    context.build_memcpy(
+        IntrinsicFunction::MemoryCopy,
+        destination,
+        source,
+        size,
+        "contract_call_memcpy_to_child",
+    );
+
+    Ok(context.field_const(1).as_basic_value_enum())
+}
+
+///
 /// Generates a mimic call.
 ///
 fn call_mimic<'ctx, D>(
@@ -737,34 +618,4 @@ where
     let status_code_result =
         context.build_load(status_code_result_pointer, "system_call_status_code");
     Ok(status_code_result)
-}
-
-///
-/// Generates a memcopy call for the Identity precompile.
-///
-fn call_identity<'ctx, D>(
-    context: &mut Context<'ctx, D>,
-    destination: inkwell::values::IntValue<'ctx>,
-    source: inkwell::values::IntValue<'ctx>,
-    size: inkwell::values::IntValue<'ctx>,
-) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
-where
-    D: Dependency,
-{
-    let destination = context.access_memory(
-        destination,
-        AddressSpace::Heap,
-        "contract_call_identity_destination",
-    );
-    let source = context.access_memory(source, AddressSpace::Heap, "contract_call_identity_source");
-
-    context.build_memcpy(
-        IntrinsicFunction::MemoryCopy,
-        destination,
-        source,
-        size,
-        "contract_call_memcpy_to_child",
-    );
-
-    Ok(context.field_const(1).as_basic_value_enum())
 }
