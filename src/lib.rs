@@ -9,6 +9,7 @@ pub(crate) mod hashes;
 
 pub use self::context::address_space::AddressSpace;
 pub use self::context::argument::Argument;
+pub use self::context::attribute::Attribute;
 pub use self::context::build::Build;
 pub use self::context::code_type::CodeType;
 pub use self::context::evm_data::EVMData as ContextEVMData;

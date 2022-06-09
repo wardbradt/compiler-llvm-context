@@ -4,6 +4,7 @@
 
 pub mod address_space;
 pub mod argument;
+pub mod attribute;
 pub mod build;
 pub mod code_type;
 pub mod evm_data;
@@ -22,6 +23,7 @@ use crate::dump_flag::DumpFlag;
 use crate::Dependency;
 
 use self::address_space::AddressSpace;
+use self::attribute::Attribute;
 use self::build::Build;
 use self::code_type::CodeType;
 use self::evm_data::EVMData;
@@ -342,7 +344,7 @@ where
             value.add_attribute(
                 inkwell::attributes::AttributeLoc::Function,
                 self.llvm
-                    .create_enum_attribute(inkwell::LLVMAttributeKindCode::NoInline, 0),
+                    .create_enum_attribute(Attribute::NoInline as u32, 0),
             );
         }
 
@@ -414,11 +416,13 @@ where
     ///
     pub fn get_intrinsic_function(
         &self,
-        intrinsic: IntrinsicFunction,
+        function: IntrinsicFunction,
     ) -> inkwell::values::FunctionValue<'ctx> {
-        self.module()
-            .get_intrinsic_function(intrinsic.name(), intrinsic.argument_types(self).as_slice())
-            .unwrap_or_else(|| panic!("Intrinsic function `{}` does not exist", intrinsic.name()))
+        let intrinsic = inkwell::intrinsics::Intrinsic::find(function.name())
+            .unwrap_or_else(|| panic!("Intrinsic function `{}` does not exist", function.name()));
+        intrinsic
+            .get_declaration(self.module(), function.argument_types(self).as_slice())
+            .unwrap_or_else(|| panic!("Intrinsic function `{}` declaration error", function.name()))
     }
 
     ///
@@ -587,8 +591,13 @@ where
         args: &[inkwell::values::BasicValueEnum<'ctx>],
         name: &str,
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
+        let args: Vec<inkwell::values::BasicMetadataValueEnum> = args
+            .iter()
+            .copied()
+            .map(inkwell::values::BasicMetadataValueEnum::from)
+            .collect();
         self.builder
-            .build_call(function, args, name)
+            .build_call(function, args.as_slice(), name)
             .try_as_basic_value()
             .left()
     }
@@ -634,11 +643,12 @@ where
         self.builder.build_landing_pad(
             landing_pad_type,
             self.runtime.personality,
-            vec![self
+            &[self
                 .integer_type(compiler_common::BITLENGTH_BYTE)
                 .ptr_type(AddressSpace::Stack.into())
                 .const_zero()
                 .as_basic_value_enum()],
+            false,
             "invoke_catch_landing",
         );
         self.build_call(
@@ -714,11 +724,12 @@ where
         self.builder.build_landing_pad(
             landing_pad_type,
             self.runtime.personality,
-            vec![self
+            &[self
                 .integer_type(compiler_common::BITLENGTH_BYTE)
                 .ptr_type(AddressSpace::Stack.into())
                 .const_zero()
                 .as_basic_value_enum()],
+            false,
             "landing",
         );
         self.write_abi_data(
@@ -774,11 +785,12 @@ where
             self.builder.build_landing_pad(
                 landing_pad_type,
                 self.runtime.personality,
-                vec![self
+                &[self
                     .integer_type(compiler_common::BITLENGTH_BYTE)
                     .ptr_type(AddressSpace::Stack.into())
                     .const_zero()
                     .as_basic_value_enum()],
+                false,
                 "near_call_catch_landing",
             );
             self.build_call(handler.value, &[], "near_call_catch_call");
@@ -793,18 +805,16 @@ where
                 name,
             );
             self.set_basic_block(success_block);
-            call_site_value
+            call_site_value.try_as_basic_value().left()
         } else {
-            self.builder.build_call(
+            self.build_call(
                 self.get_intrinsic_function(IntrinsicFunction::NearCall),
                 args.as_slice(),
                 name,
             )
         };
 
-        if let (Some(return_pointer), Some(mut return_value)) =
-            (return_pointer, call_site_value.try_as_basic_value().left())
-        {
+        if let (Some(return_pointer), Some(mut return_value)) = (return_pointer, call_site_value) {
             if let Some(return_type) = function.get_type().get_return_type() {
                 if return_type.is_pointer_type() {
                     return_value = self
@@ -843,12 +853,13 @@ where
         let call_site_value = self.builder.build_call(
             intrinsic,
             &[
-                destination.as_basic_value_enum(),
-                source.as_basic_value_enum(),
-                size.as_basic_value_enum(),
+                destination.as_basic_value_enum().into(),
+                source.as_basic_value_enum().into(),
+                size.as_basic_value_enum().into(),
                 self.integer_type(compiler_common::BITLENGTH_BOOLEAN)
                     .const_zero()
-                    .as_basic_value_enum(),
+                    .as_basic_value_enum()
+                    .into(),
             ],
             name,
         );
@@ -1137,8 +1148,12 @@ where
     pub fn function_type(
         &self,
         return_values_length: usize,
-        mut argument_types: Vec<inkwell::types::BasicTypeEnum<'ctx>>,
+        argument_types: Vec<inkwell::types::BasicTypeEnum<'ctx>>,
     ) -> inkwell::types::FunctionType<'ctx> {
+        let mut argument_types: Vec<inkwell::types::BasicMetadataTypeEnum> = argument_types
+            .into_iter()
+            .map(inkwell::types::BasicMetadataTypeEnum::from)
+            .collect();
         match return_values_length {
             0 => self
                 .llvm
@@ -1151,7 +1166,7 @@ where
                     .llvm
                     .struct_type(return_types.as_slice(), false)
                     .ptr_type(AddressSpace::Stack.into());
-                argument_types.insert(0, return_type.as_basic_type_enum());
+                argument_types.insert(0, return_type.as_basic_type_enum().into());
                 return_type.fn_type(argument_types.as_slice(), false)
             }
         }

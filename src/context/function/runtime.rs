@@ -5,6 +5,7 @@
 use inkwell::types::BasicType;
 
 use crate::context::address_space::AddressSpace;
+use crate::context::attribute::Attribute;
 
 ///
 /// The LLVM runtime functions.
@@ -106,7 +107,8 @@ impl<'ctx> Runtime<'ctx> {
                 vec![
                     llvm.i8_type()
                         .ptr_type(AddressSpace::Stack.into())
-                        .as_basic_type_enum();
+                        .as_basic_type_enum()
+                        .into();
                     3
                 ]
                 .as_slice(),
@@ -116,7 +118,7 @@ impl<'ctx> Runtime<'ctx> {
         );
         cxa_throw.add_attribute(
             inkwell::attributes::AttributeLoc::Function,
-            llvm.create_enum_attribute(inkwell::LLVMAttributeKindCode::NoProfile, 0),
+            llvm.create_enum_attribute(Attribute::NoProfile as u32, 0),
         );
 
         let add_mod = module.add_function(
@@ -125,7 +127,8 @@ impl<'ctx> Runtime<'ctx> {
                 .fn_type(
                     vec![
                         llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                            .as_basic_type_enum();
+                            .as_basic_type_enum()
+                            .into();
                         3
                     ]
                     .as_slice(),
@@ -140,7 +143,8 @@ impl<'ctx> Runtime<'ctx> {
                 .fn_type(
                     vec![
                         llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                            .as_basic_type_enum();
+                            .as_basic_type_enum()
+                            .into();
                         3
                     ]
                     .as_slice(),
@@ -155,7 +159,8 @@ impl<'ctx> Runtime<'ctx> {
                 .fn_type(
                     vec![
                         llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                            .as_basic_type_enum();
+                            .as_basic_type_enum()
+                            .into();
                         2
                     ]
                     .as_slice(),
@@ -171,7 +176,8 @@ impl<'ctx> Runtime<'ctx> {
                 .fn_type(
                     vec![
                         llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                            .as_basic_type_enum();
+                            .as_basic_type_enum()
+                            .into();
                         1
                     ]
                     .as_slice(),
@@ -185,7 +191,8 @@ impl<'ctx> Runtime<'ctx> {
                 .fn_type(
                     vec![
                         llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                            .as_basic_type_enum();
+                            .as_basic_type_enum()
+                            .into();
                         2
                     ]
                     .as_slice(),
@@ -210,10 +217,12 @@ impl<'ctx> Runtime<'ctx> {
             external_call_result_type.fn_type(
                 &[
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
+                        .as_basic_type_enum()
+                        .into(),
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
-                    external_call_result_type,
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
                 ],
                 false,
             ),
@@ -224,10 +233,12 @@ impl<'ctx> Runtime<'ctx> {
             external_call_result_type.fn_type(
                 &[
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
+                        .as_basic_type_enum()
+                        .into(),
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
-                    external_call_result_type,
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
                 ],
                 false,
             ),
@@ -238,10 +249,12 @@ impl<'ctx> Runtime<'ctx> {
             external_call_result_type.fn_type(
                 &[
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
+                        .as_basic_type_enum()
+                        .into(),
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
-                    external_call_result_type,
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
                 ],
                 false,
             ),
@@ -252,12 +265,15 @@ impl<'ctx> Runtime<'ctx> {
             external_call_result_type.fn_type(
                 &[
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
+                        .as_basic_type_enum()
+                        .into(),
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
+                        .as_basic_type_enum()
+                        .into(),
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
-                    external_call_result_type,
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
                 ],
                 false,
             ),
@@ -269,11 +285,14 @@ impl<'ctx> Runtime<'ctx> {
             llvm.void_type().fn_type(
                 &[
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
+                        .as_basic_type_enum()
+                        .into(),
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
+                        .as_basic_type_enum()
+                        .into(),
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum(),
+                        .as_basic_type_enum()
+                        .into(),
                 ],
                 false,
             ),
@@ -309,16 +328,16 @@ impl<'ctx> Runtime<'ctx> {
         function: inkwell::values::FunctionValue<'ctx>,
     ) {
         for attribute_kind in [
-            inkwell::LLVMAttributeKindCode::MustProgress,
-            inkwell::LLVMAttributeKindCode::NoUnwind,
-            inkwell::LLVMAttributeKindCode::ReadNone,
-            inkwell::LLVMAttributeKindCode::WillReturn,
+            Attribute::MustProgress,
+            Attribute::NoUnwind,
+            Attribute::ReadNone,
+            Attribute::WillReturn,
         ]
         .into_iter()
         {
             function.add_attribute(
                 inkwell::attributes::AttributeLoc::Function,
-                llvm.create_enum_attribute(attribute_kind, 0),
+                llvm.create_enum_attribute(attribute_kind as u32, 0),
             );
         }
     }

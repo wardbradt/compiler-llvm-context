@@ -19,6 +19,7 @@ pub fn i0_o0<'ctx, D>(
 where
     D: Dependency,
 {
+    #[allow(clippy::single_match)]
     match identifier.as_str() {
         "00000000" => {
             context.build_call(
