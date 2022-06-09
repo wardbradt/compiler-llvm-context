@@ -44,6 +44,7 @@ pub use self::evm::memory;
 pub use self::evm::r#return;
 pub use self::evm::return_data;
 pub use self::evm::storage;
+pub use self::evm::verbatim;
 pub use self::hashes::bytecode_hash;
 pub use self::hashes::keccak256;
 

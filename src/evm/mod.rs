@@ -17,6 +17,7 @@ pub mod memory;
 pub mod r#return;
 pub mod return_data;
 pub mod storage;
+pub mod verbatim;
 
 use std::str::FromStr;
 
