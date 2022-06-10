@@ -2,7 +2,7 @@
 //! The LLVM module build.
 //!
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 ///
 /// The LLVM module build.
@@ -18,7 +18,7 @@ pub struct Build {
     /// The zkEVM bytecode hash.
     pub hash: String,
     /// The factory dependencies.
-    pub factory_dependencies: HashMap<String, String>,
+    pub factory_dependencies: BTreeMap<String, String>,
 }
 
 impl Build {
@@ -36,7 +36,7 @@ impl Build {
             assembly,
             bytecode,
             hash,
-            factory_dependencies: HashMap::new(),
+            factory_dependencies: BTreeMap::new(),
         }
     }
 }

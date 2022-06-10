@@ -133,13 +133,34 @@ where
 }
 
 ///
+/// Generates a mimic call.
+///
+pub fn mimic_call<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    address: inkwell::values::IntValue<'ctx>,
+    mimic: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    super::call_mimic(
+        context,
+        context.runtime.mimic_call,
+        address,
+        mimic,
+        abi_data,
+    )
+}
+
+///
 /// Generates a system call.
 ///
 pub fn system_call<'ctx, D>(
     context: &mut Context<'ctx, D>,
     address: inkwell::values::IntValue<'ctx>,
     abi_data: inkwell::values::IntValue<'ctx>,
-    input_length: inkwell::values::IntValue<'ctx>,
+    is_delegate: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
@@ -154,7 +175,6 @@ where
     let result_pointer = context.build_alloca(context.field_type(), "system_call_result_pointer");
     context.build_store(result_pointer, context.field_const(0));
 
-    let is_delegate = input_length;
     let is_delegate_equals_zero = context.builder().build_int_compare(
         inkwell::IntPredicate::EQ,
         is_delegate,

@@ -10,31 +10,24 @@ use crate::context::Context;
 use crate::Dependency;
 
 ///
-/// Translates the 0-in-0-out instruction.
+/// Translates the `throw` instruction.
 ///
-pub fn i0_o0<'ctx, D>(
+pub fn throw<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    identifier: String,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
-    #[allow(clippy::single_match)]
-    match identifier.as_str() {
-        "00000000" => {
-            context.build_call(
-                context.runtime.cxa_throw,
-                &[context
-                    .integer_type(compiler_common::BITLENGTH_BYTE)
-                    .ptr_type(AddressSpace::Stack.into())
-                    .const_null()
-                    .as_basic_value_enum(); 3],
-                Runtime::FUNCTION_CXA_THROW,
-            );
-            context.build_unreachable();
-        }
-        _ => {}
-    }
+    context.build_call(
+        context.runtime.cxa_throw,
+        &[context
+            .integer_type(compiler_common::BITLENGTH_BYTE)
+            .ptr_type(AddressSpace::Stack.into())
+            .const_null()
+            .as_basic_value_enum(); 3],
+        Runtime::FUNCTION_CXA_THROW,
+    );
+    context.build_unreachable();
 
     Ok(None)
 }

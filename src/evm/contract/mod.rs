@@ -57,14 +57,7 @@ where
             let mimic = value.unwrap_or_else(|| context.field_const(0));
             let abi_data = input_offset;
 
-            return call_mimic(
-                context,
-                context.runtime.mimic_call,
-                address,
-                mimic,
-                abi_data,
-            )
-            .map(Some);
+            return simulation::mimic_call(context, address, mimic, abi_data).map(Some);
         } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_SYSTEM_CALL)
             == address_simulation
         {
