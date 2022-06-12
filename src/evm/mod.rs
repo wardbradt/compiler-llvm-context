@@ -10,6 +10,7 @@ pub mod contract;
 pub mod create;
 pub mod ether_gas;
 pub mod event;
+pub mod ext_code;
 pub mod hash;
 pub mod immutable;
 pub mod math;

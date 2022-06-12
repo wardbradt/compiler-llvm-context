@@ -38,6 +38,7 @@ pub use self::evm::contract;
 pub use self::evm::create;
 pub use self::evm::ether_gas;
 pub use self::evm::event;
+pub use self::evm::ext_code;
 pub use self::evm::hash;
 pub use self::evm::immutable;
 pub use self::evm::math;

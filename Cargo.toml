@@ -8,6 +8,9 @@ license = "Apache-2.0"
 edition = "2021"
 description = "The zkEVM Solidity compiler"
 
+[lib]
+doctest = false
+
 [dependencies]
 anyhow = "1.0"
 semver = "1.0"
