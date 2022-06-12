@@ -76,7 +76,7 @@ where
             context.runtime.static_call,
             &[
                 context
-                    .field_const_str(compiler_common::ABI_ADDRESS_ETH_TOKEN)
+                    .field_const_str(compiler_common::ABI_ADDRESS_ACCOUNT_CODE_STORAGE)
                     .as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
                 result_pointer.as_basic_value_enum(),
@@ -224,7 +224,7 @@ where
             context.runtime.static_call,
             &[
                 context
-                    .field_const_str(compiler_common::ABI_ADDRESS_ETH_TOKEN)
+                    .field_const_str(compiler_common::ABI_ADDRESS_ACCOUNT_CODE_STORAGE)
                     .as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
                 result_pointer.as_basic_value_enum(),

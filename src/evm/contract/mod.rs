@@ -623,43 +623,6 @@ fn abi_data<'ctx, D>(
 where
     D: Dependency,
 {
-    // let input_offset_truncated = context.builder().build_and(
-    //     input_offset,
-    //     context.field_const(u64::MAX as u64),
-    //     "abi_data_input_offset_truncated",
-    // );
-    // let input_length_truncated = context.builder().build_and(
-    //     input_length,
-    //     context.field_const(u32::MAX as u64),
-    //     "abi_data_input_length_truncated",
-    // );
-    // let gas_truncated = context.builder().build_and(
-    //     gas,
-    //     context.field_const(u32::MAX as u64),
-    //     "abi_data_gas_truncated",
-    // );
-    // let gas_shifted = context.builder().build_left_shift(
-    //     gas_truncated,
-    //     context.field_const(compiler_common::BITLENGTH_X32 as u64),
-    //     "abi_data_gas_shifted",
-    // );
-    // let gas_add_input_length = context.builder().build_int_add(
-    //     gas_shifted,
-    //     input_length_truncated,
-    //     "abi_data_gas_add_input_length",
-    // );
-    // let gas_add_input_length_shifted = context.builder().build_left_shift(
-    //     gas_add_input_length,
-    //     context.field_const(compiler_common::BITLENGTH_X64 as u64),
-    //     "abi_data_gas_add_input_length_shifted",
-    // );
-    // let abi_data = context.builder().build_int_add(
-    //     gas_add_input_length_shifted,
-    //     input_offset_truncated,
-    //     "abi_data_result",
-    // );
-    // Ok(abi_data.as_basic_value_enum())
-
     let input_offset_truncated = context.builder().build_and(
         input_offset,
         context.field_const(u64::MAX as u64),
@@ -670,13 +633,28 @@ where
         context.field_const(u32::MAX as u64),
         "abi_data_input_length_truncated",
     );
-    let input_length_shifted = context.builder().build_left_shift(
+    let gas_truncated = context.builder().build_and(
+        gas,
+        context.field_const(u32::MAX as u64),
+        "abi_data_gas_truncated",
+    );
+    let gas_shifted = context.builder().build_left_shift(
+        gas_truncated,
+        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        "abi_data_gas_shifted",
+    );
+    let gas_add_input_length = context.builder().build_int_add(
+        gas_shifted,
         input_length_truncated,
+        "abi_data_gas_add_input_length",
+    );
+    let gas_add_input_length_shifted = context.builder().build_left_shift(
+        gas_add_input_length,
         context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        "abi_data_input_length_shifted",
+        "abi_data_gas_add_input_length_shifted",
     );
     let abi_data = context.builder().build_int_add(
-        input_length_shifted,
+        gas_add_input_length_shifted,
         input_offset_truncated,
         "abi_data_result",
     );
