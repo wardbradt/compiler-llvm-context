@@ -110,6 +110,7 @@ where
         call_default_wrapped(
             context,
             function,
+            gas,
             value,
             address,
             input_offset,
@@ -121,6 +122,7 @@ where
         call_default(
             context,
             function,
+            gas,
             address,
             input_offset,
             input_length,
@@ -166,6 +168,7 @@ where
 fn call_default_wrapped<'ctx, D>(
     context: &mut Context<'ctx, D>,
     function: inkwell::values::FunctionValue<'ctx>,
+    gas: inkwell::values::IntValue<'ctx>,
     value: inkwell::values::IntValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
     input_offset: inkwell::values::IntValue<'ctx>,
@@ -206,6 +209,7 @@ where
     let result = call_default(
         context,
         function,
+        gas,
         context.field_const_str_hex(compiler_common::ABI_ADDRESS_MSG_VALUE),
         input_offset,
         input_length_with_extra,
@@ -219,6 +223,7 @@ where
     let result = call_default(
         context,
         function,
+        gas,
         address,
         input_offset,
         input_length,
@@ -236,9 +241,11 @@ where
 ///
 /// Generates a default contract call.
 ///
+#[allow(clippy::too_many_arguments)]
 fn call_default<'ctx, D>(
     context: &mut Context<'ctx, D>,
     function: inkwell::values::FunctionValue<'ctx>,
+    gas: inkwell::values::IntValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
     input_offset: inkwell::values::IntValue<'ctx>,
     input_length: inkwell::values::IntValue<'ctx>,
@@ -256,16 +263,7 @@ where
     );
     context.build_store(status_code_result_pointer, context.field_const(0));
 
-    let input_length_shifted = context.builder().build_left_shift(
-        input_length,
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        "contract_call_input_length_shifted",
-    );
-    let abi_data = context.builder().build_int_add(
-        input_length_shifted,
-        input_offset,
-        "contract_call_abi_data",
-    );
+    let abi_data = abi_data(context, gas, input_offset, input_length)?.into_int_value();
 
     let result_pointer = context
         .build_invoke_far_call(
@@ -611,4 +609,54 @@ where
     let status_code_result =
         context.build_load(status_code_result_pointer, "system_call_status_code");
     Ok(status_code_result)
+}
+
+///
+/// Generates an ABI data for default call
+///
+fn abi_data<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    gas: inkwell::values::IntValue<'ctx>,
+    input_offset: inkwell::values::IntValue<'ctx>,
+    input_length: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let input_offset_truncated = context.builder().build_and(
+        input_offset,
+        context.field_const(u64::MAX as u64),
+        "contract_call_input_offset_truncated",
+    );
+    let input_length_truncated = context.builder().build_and(
+        input_length,
+        context.field_const(u32::MAX as u64),
+        "contract_call_input_length_truncated",
+    );
+    let gas_truncated = context.builder().build_and(
+        gas,
+        context.field_const(u32::MAX as u64),
+        "contract_call_gas_truncated",
+    );
+    let gas_shifted = context.builder().build_left_shift(
+        gas_truncated,
+        context.field_const(compiler_common::BITLENGTH_X32 as u64),
+        "contract_call_gas_shifted",
+    );
+    let gas_add_input_length = context.builder().build_int_add(
+        gas_shifted,
+        input_length_truncated,
+        "contract_call_gas_add_input_length",
+    );
+    let gas_add_input_length_shifted = context.builder().build_left_shift(
+        gas_add_input_length,
+        context.field_const(compiler_common::BITLENGTH_X64 as u64),
+        "contract_call_gas_add_input_length_shifted",
+    );
+    let abi_data = context.builder().build_int_add(
+        gas_add_input_length_shifted,
+        input_offset_truncated,
+        "contract_call_abi_data",
+    );
+    Ok(abi_data.as_basic_value_enum())
 }
