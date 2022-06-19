@@ -23,6 +23,8 @@ where
 {
     let intrinsic = context.get_intrinsic_function(IntrinsicFunction::Event);
 
+    let exit_block = context.append_basic_block("event_exit");
+
     let topics_length = context.field_const(topics.len() as u64);
     let data_length_shifted = context.builder().build_left_shift(
         length,
@@ -41,7 +43,7 @@ where
 
         let data_empty_block = context.append_basic_block("event_odd_data_empty");
         let data_not_empty_block = context.append_basic_block("event_odd_data_not_empty");
-        let join_block = context.append_basic_block("event_odd_data_join");
+        let loop_block = context.append_basic_block("event_odd_data_loop");
 
         let data_empty_condition = context.builder().build_int_compare(
             inkwell::IntPredicate::EQ,
@@ -66,6 +68,7 @@ where
                 ],
                 "event_odd_data_empty_init_with_no_topics",
             );
+            context.build_unconditional_branch(exit_block);
         } else {
             let mut topic_index = 0;
             context.build_call(
@@ -101,8 +104,8 @@ where
             );
             context.build_store(range_start_pointer, range_start);
             context.build_store(length_pointer, length);
+            context.build_unconditional_branch(loop_block);
         }
-        context.build_unconditional_branch(join_block);
 
         context.set_basic_block(data_not_empty_block);
         let pointer = context.access_memory(
@@ -172,9 +175,9 @@ where
                 "event_odd_length_without_first",
             ),
         );
-        context.build_unconditional_branch(join_block);
+        context.build_unconditional_branch(loop_block);
 
-        context.set_basic_block(join_block);
+        context.set_basic_block(loop_block);
         let range_start = context
             .build_load(range_start_pointer, "event_odd_range_start_joined")
             .into_int_value();
@@ -212,7 +215,6 @@ where
     let condition_block = context.append_basic_block("event_loop_condition");
     let body_block = context.append_basic_block("event_loop_body");
     let increment_block = context.append_basic_block("event_loop_increment");
-    let join_block = context.append_basic_block("event_loop_join");
 
     let index_pointer = context.build_alloca(context.field_type(), "event_loop_index_pointer");
     let range_end = context
@@ -231,7 +233,7 @@ where
         range_end,
         "event_loop_condition",
     );
-    context.build_conditional_branch(condition, body_block, join_block);
+    context.build_conditional_branch(condition, body_block, exit_block);
 
     context.set_basic_block(increment_block);
     let index_value = context
@@ -310,7 +312,7 @@ where
     );
     context.build_unconditional_branch(increment_block);
 
-    context.set_basic_block(join_block);
+    context.set_basic_block(exit_block);
 
     Ok(None)
 }
