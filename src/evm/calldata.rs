@@ -55,9 +55,9 @@ where
                 as u64,
         ),
         AddressSpace::Heap,
-        "calldata_size_length_pointer",
+        "calldata_size_pointer",
     );
-    let length = context.build_load(length_pointer, "calldata_value");
+    let length = context.build_load(length_pointer, "calldata_size");
 
     Ok(Some(length.as_basic_value_enum()))
 }
