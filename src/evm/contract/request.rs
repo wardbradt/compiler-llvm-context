@@ -102,18 +102,6 @@ where
         context.field_const(u64::MAX as u64),
         "call_child_data_offset",
     );
-    let child_data_length_shifted = context.builder().build_right_shift(
-        result_abi_data.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        false,
-        "call_child_data_length_shifted",
-    );
-    let child_data_length = context.builder().build_and(
-        child_data_length_shifted,
-        context.field_const(u64::MAX as u64),
-        "call_child_data_length",
-    );
-    context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
 
     let result_status_code_pointer = unsafe {
         context.builder().build_gep(
