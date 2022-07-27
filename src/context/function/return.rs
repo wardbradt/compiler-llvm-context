@@ -56,4 +56,16 @@ impl<'ctx> Return<'ctx> {
             Return::Compound { pointer, .. } => Some(*pointer),
         }
     }
+
+    ///
+    /// Returns the return data size in bytes, based on the default stack alignment.
+    ///
+    pub fn return_data_size(&self) -> usize {
+        compiler_common::SIZE_FIELD
+            * match self {
+                Self::None => 0,
+                Self::Primitive { .. } => 1,
+                Self::Compound { size, .. } => *size,
+            }
+    }
 }

@@ -102,6 +102,19 @@ impl<'ctx> Function<'ctx> {
     }
 
     ///
+    /// Returns the return data size in bytes, based on the default stack alignment.
+    ///
+    /// # Panics
+    /// If the pointer has not been set yet.
+    ///
+    pub fn return_data_size(&self) -> usize {
+        self.r#return
+            .as_ref()
+            .map(|r#return| r#return.return_data_size())
+            .unwrap_or_default()
+    }
+
+    ///
     /// Returns the EVM data reference.
     ///
     /// # Panics
