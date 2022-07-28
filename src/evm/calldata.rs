@@ -128,10 +128,15 @@ where
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(memory_zero_block);
+    let destination_pointer = context.access_memory(
+        destination_offset,
+        AddressSpace::Heap,
+        "calldata_copy_memset_destination_pointer",
+    );
     context.build_call(
         context.runtime.memset_uma_heap,
         &[
-            destination_offset.as_basic_value_enum(),
+            destination_pointer.as_basic_value_enum(),
             context.field_const(0).as_basic_value_enum(),
             size.as_basic_value_enum(),
         ],

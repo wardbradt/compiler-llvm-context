@@ -285,6 +285,7 @@ impl<'ctx> Runtime<'ctx> {
             llvm.void_type().fn_type(
                 &[
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .ptr_type(AddressSpace::Heap.into())
                         .as_basic_type_enum()
                         .into(),
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
