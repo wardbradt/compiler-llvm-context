@@ -18,7 +18,7 @@ where
     crate::evm::contract::request::request(
         context,
         context.field_const_str(compiler_common::ABI_ADDRESS_ACCOUNT_CODE_STORAGE),
-        "getCodeSize(address)",
+        "getCodeSize(uint256)",
         vec![address],
     )
     .map(Some)
@@ -37,7 +37,7 @@ where
     crate::evm::contract::request::request(
         context,
         context.field_const_str(compiler_common::ABI_ADDRESS_ACCOUNT_CODE_STORAGE),
-        "getCodeHash(address)",
+        "getCodeHash(uint256)",
         vec![address],
     )
     .map(Some)
