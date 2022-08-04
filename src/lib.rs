@@ -34,6 +34,7 @@ pub use self::evm::arithmetic;
 pub use self::evm::bitwise;
 pub use self::evm::calldata;
 pub use self::evm::comparison;
+pub use self::evm::context as contract_context;
 pub use self::evm::contract;
 pub use self::evm::create;
 pub use self::evm::ether_gas;

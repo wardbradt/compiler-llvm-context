@@ -12,7 +12,8 @@ use crate::Dependency;
 ///
 pub fn addition<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -20,11 +21,7 @@ where
     Ok(Some(
         context
             .builder()
-            .build_int_add(
-                arguments[0].into_int_value(),
-                arguments[1].into_int_value(),
-                "addition_result",
-            )
+            .build_int_add(operand_1, operand_2, "addition_result")
             .as_basic_value_enum(),
     ))
 }
@@ -34,7 +31,8 @@ where
 ///
 pub fn subtraction<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -42,11 +40,7 @@ where
     Ok(Some(
         context
             .builder()
-            .build_int_sub(
-                arguments[0].into_int_value(),
-                arguments[1].into_int_value(),
-                "subtraction_result",
-            )
+            .build_int_sub(operand_1, operand_2, "subtraction_result")
             .as_basic_value_enum(),
     ))
 }
@@ -56,7 +50,8 @@ where
 ///
 pub fn multiplication<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -64,11 +59,7 @@ where
     Ok(Some(
         context
             .builder()
-            .build_int_mul(
-                arguments[0].into_int_value(),
-                arguments[1].into_int_value(),
-                "multiplication_result",
-            )
+            .build_int_mul(operand_1, operand_2, "multiplication_result")
             .as_basic_value_enum(),
     ))
 }
@@ -78,7 +69,8 @@ where
 ///
 pub fn division<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -90,18 +82,17 @@ where
     let result_pointer = context.build_alloca(context.field_type(), "division_result_pointer");
     let condition = context.builder().build_int_compare(
         inkwell::IntPredicate::EQ,
-        arguments[1].into_int_value(),
+        operand_2,
         context.field_const(0),
         "division_is_divider_zero",
     );
     context.build_conditional_branch(condition, zero_block, non_zero_block);
 
     context.set_basic_block(non_zero_block);
-    let result = context.builder().build_int_unsigned_div(
-        arguments[0].into_int_value(),
-        arguments[1].into_int_value(),
-        "division_result_non_zero",
-    );
+    let result =
+        context
+            .builder()
+            .build_int_unsigned_div(operand_1, operand_2, "division_result_non_zero");
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
 
@@ -120,7 +111,8 @@ where
 ///
 pub fn remainder<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -132,18 +124,17 @@ where
     let result_pointer = context.build_alloca(context.field_type(), "remainder_result_pointer");
     let condition = context.builder().build_int_compare(
         inkwell::IntPredicate::EQ,
-        arguments[1].into_int_value(),
+        operand_2,
         context.field_const(0),
         "remainder_is_modulo_zero",
     );
     context.build_conditional_branch(condition, zero_block, non_zero_block);
 
     context.set_basic_block(non_zero_block);
-    let result = context.builder().build_int_unsigned_rem(
-        arguments[0].into_int_value(),
-        arguments[1].into_int_value(),
-        "remainder_result_non_zero",
-    );
+    let result =
+        context
+            .builder()
+            .build_int_unsigned_rem(operand_1, operand_2, "remainder_result_non_zero");
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(join_block);
 
@@ -162,7 +153,8 @@ where
 ///
 pub fn division_signed<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -177,7 +169,7 @@ where
         context.build_alloca(context.field_type(), "division_signed_result_pointer");
     let condition_is_divider_zero = context.builder().build_int_compare(
         inkwell::IntPredicate::EQ,
-        arguments[1].into_int_value(),
+        operand_2,
         context.field_const(0),
         "division_signed_is_divider_zero",
     );
@@ -186,13 +178,13 @@ where
     context.set_basic_block(non_zero_block);
     let condition_is_divided_int_min = context.builder().build_int_compare(
         inkwell::IntPredicate::EQ,
-        arguments[0].into_int_value(),
+        operand_1,
         context.field_const_str("8000000000000000000000000000000000000000000000000000000000000000"),
         "division_signed_is_divided_int_min",
     );
     let condition_is_divider_minus_one = context.builder().build_int_compare(
         inkwell::IntPredicate::EQ,
-        arguments[1].into_int_value(),
+        operand_2,
         context.field_type().const_all_ones(),
         "division_signed_is_divider_minus_one",
     );
@@ -204,13 +196,13 @@ where
     context.build_conditional_branch(condition_is_overflow, overflow_block, non_overflow_block);
 
     context.set_basic_block(overflow_block);
-    context.build_store(result_pointer, arguments[0]);
+    context.build_store(result_pointer, operand_1);
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(non_overflow_block);
     let result = context.builder().build_int_signed_div(
-        arguments[0].into_int_value(),
-        arguments[1].into_int_value(),
+        operand_1,
+        operand_2,
         "division_signed_result_non_zero",
     );
     context.build_store(result_pointer, result);
@@ -231,7 +223,8 @@ where
 ///
 pub fn remainder_signed<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -244,7 +237,7 @@ where
         context.build_alloca(context.field_type(), "remainder_signed_result_pointer");
     let condition = context.builder().build_int_compare(
         inkwell::IntPredicate::EQ,
-        arguments[1].into_int_value(),
+        operand_2,
         context.field_const(0),
         "remainder_signed_is_modulo_zero",
     );
@@ -252,8 +245,8 @@ where
 
     context.set_basic_block(non_zero_block);
     let result = context.builder().build_int_signed_rem(
-        arguments[0].into_int_value(),
-        arguments[1].into_int_value(),
+        operand_1,
+        operand_2,
         "remainder_signed_result_non_zero",
     );
     context.build_store(result_pointer, result);

@@ -12,7 +12,8 @@ use crate::Dependency;
 ///
 pub fn or<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -20,11 +21,7 @@ where
     Ok(Some(
         context
             .builder()
-            .build_or(
-                arguments[0].into_int_value(),
-                arguments[1].into_int_value(),
-                "or_result",
-            )
+            .build_or(operand_1, operand_2, "or_result")
             .as_basic_value_enum(),
     ))
 }
@@ -34,7 +31,8 @@ where
 ///
 pub fn xor<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -42,11 +40,7 @@ where
     Ok(Some(
         context
             .builder()
-            .build_xor(
-                arguments[0].into_int_value(),
-                arguments[1].into_int_value(),
-                "xor_result",
-            )
+            .build_xor(operand_1, operand_2, "xor_result")
             .as_basic_value_enum(),
     ))
 }
@@ -56,7 +50,8 @@ where
 ///
 pub fn and<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -64,11 +59,7 @@ where
     Ok(Some(
         context
             .builder()
-            .build_and(
-                arguments[0].into_int_value(),
-                arguments[1].into_int_value(),
-                "and_result",
-            )
+            .build_and(operand_1, operand_2, "and_result")
             .as_basic_value_enum(),
     ))
 }
@@ -78,7 +69,8 @@ where
 ///
 pub fn shift_left<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -90,7 +82,7 @@ where
     let result_pointer = context.build_alloca(context.field_type(), "shift_left_result_pointer");
     let condition_is_overflow = context.builder().build_int_compare(
         inkwell::IntPredicate::UGT,
-        arguments[0].into_int_value(),
+        operand_1,
         context.field_const((compiler_common::BITLENGTH_FIELD - 1) as u64),
         "shift_left_is_overflow",
     );
@@ -101,11 +93,10 @@ where
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(non_overflow_block);
-    let value = context.builder().build_left_shift(
-        arguments[1].into_int_value(),
-        arguments[0].into_int_value(),
-        "shift_left_non_overflow_result",
-    );
+    let value =
+        context
+            .builder()
+            .build_left_shift(operand_2, operand_1, "shift_left_non_overflow_result");
     context.build_store(result_pointer, value);
     context.build_unconditional_branch(join_block);
 
@@ -119,7 +110,8 @@ where
 ///
 pub fn shift_right<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -131,7 +123,7 @@ where
     let result_pointer = context.build_alloca(context.field_type(), "shift_right_result_pointer");
     let condition_is_overflow = context.builder().build_int_compare(
         inkwell::IntPredicate::UGT,
-        arguments[0].into_int_value(),
+        operand_1,
         context.field_const((compiler_common::BITLENGTH_FIELD - 1) as u64),
         "shift_right_is_overflow",
     );
@@ -143,8 +135,8 @@ where
 
     context.set_basic_block(non_overflow_block);
     let value = context.builder().build_right_shift(
-        arguments[1].into_int_value(),
-        arguments[0].into_int_value(),
+        operand_2,
+        operand_1,
         false,
         "shift_right_non_overflow_result",
     );
@@ -161,7 +153,8 @@ where
 ///
 pub fn shift_right_arithmetic<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -180,7 +173,7 @@ where
     );
     let condition_is_overflow = context.builder().build_int_compare(
         inkwell::IntPredicate::UGT,
-        arguments[0].into_int_value(),
+        operand_1,
         context.field_const((compiler_common::BITLENGTH_FIELD - 1) as u64),
         "shift_right_arithmetic_is_overflow",
     );
@@ -188,7 +181,7 @@ where
 
     context.set_basic_block(overflow_block);
     let sign_bit = context.builder().build_right_shift(
-        arguments[1].into_int_value(),
+        operand_2,
         context.field_const((compiler_common::BITLENGTH_FIELD - 1) as u64),
         false,
         "shift_right_arithmetic_sign_bit",
@@ -214,8 +207,8 @@ where
 
     context.set_basic_block(non_overflow_block);
     let value = context.builder().build_right_shift(
-        arguments[1].into_int_value(),
-        arguments[0].into_int_value(),
+        operand_2,
+        operand_1,
         true,
         "shift_right_arithmetic_non_overflow_result",
     );
@@ -232,14 +225,15 @@ where
 ///
 pub fn byte<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
     let byte_index = context.builder().build_int_sub(
         context.field_const((compiler_common::SIZE_FIELD - 1) as u64),
-        arguments[0].into_int_value(),
+        operand_1,
         "byte_index",
     );
     let byte_bits_offset = context.builder().build_int_mul(
@@ -247,12 +241,10 @@ where
         context.field_const(compiler_common::BITLENGTH_BYTE as u64),
         "byte_bits_offset",
     );
-    let value_shifted = context.builder().build_right_shift(
-        arguments[1].into_int_value(),
-        byte_bits_offset,
-        false,
-        "value_shifted",
-    );
+    let value_shifted =
+        context
+            .builder()
+            .build_right_shift(operand_2, byte_bits_offset, false, "value_shifted");
     let byte_result =
         context
             .builder()

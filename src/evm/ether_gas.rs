@@ -39,7 +39,7 @@ where
 }
 
 ///
-/// Translates the `balance` instruction.
+/// Translates the `balance` instructions.
 ///
 pub fn balance<'ctx, D>(
     context: &mut Context<'ctx, D>,

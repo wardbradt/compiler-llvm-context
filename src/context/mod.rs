@@ -763,7 +763,7 @@ where
                     .as_basic_type_enum(),
             ])
             .as_basic_type_enum();
-        let result_pointer = self.build_alloca(result_type, "mimic_call_result_pointer");
+        let result_pointer = self.build_alloca(result_type, "far_call_result_pointer");
         arguments.push(result_pointer.as_basic_value_enum());
 
         self.set_basic_block(catch_block);

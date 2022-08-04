@@ -7,14 +7,14 @@ use crate::context::code_type::CodeType;
 use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::Context;
 use crate::Dependency;
-use inkwell::values::BasicValue;
 
 ///
 /// Translates the normal return.
 ///
 pub fn r#return<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    offset: inkwell::values::IntValue<'ctx>,
+    length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -68,10 +68,7 @@ where
             );
         }
         CodeType::Runtime => {
-            let offset = arguments[0].into_int_value();
-            let size = arguments[1].into_int_value();
-
-            context.build_exit(IntrinsicFunction::Return, offset, size);
+            context.build_exit(IntrinsicFunction::Return, offset, length);
         }
     }
 
@@ -83,15 +80,13 @@ where
 ///
 pub fn revert<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    offset: inkwell::values::IntValue<'ctx>,
+    length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
-    let offset = arguments[0].into_int_value();
-    let size = arguments[1].into_int_value();
-
-    context.build_exit(IntrinsicFunction::Revert, offset, size);
+    context.build_exit(IntrinsicFunction::Revert, offset, length);
     Ok(None)
 }
 
@@ -104,13 +99,7 @@ pub fn stop<'ctx, D>(
 where
     D: Dependency,
 {
-    self::r#return(
-        context,
-        [
-            context.field_const(0).as_basic_value_enum(),
-            context.field_const(0).as_basic_value_enum(),
-        ],
-    )
+    self::r#return(context, context.field_const(0), context.field_const(0))
 }
 
 ///
@@ -122,10 +111,5 @@ pub fn invalid<'ctx, D>(
 where
     D: Dependency,
 {
-    context.build_exit(
-        IntrinsicFunction::Revert,
-        context.field_const(0),
-        context.field_const(0),
-    );
-    Ok(None)
+    self::revert(context, context.field_const(0), context.field_const(0))
 }

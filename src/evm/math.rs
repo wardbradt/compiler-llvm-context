@@ -4,20 +4,27 @@
 
 use crate::context::Context;
 use crate::Dependency;
+use inkwell::values::BasicValue;
 
 ///
 /// Translates the modular addition operation.
 ///
 pub fn add_mod<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 3],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
+    modulo: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
     Ok(context.build_call(
         context.runtime.add_mod,
-        &[arguments[0], arguments[1], arguments[2]],
+        &[
+            operand_1.as_basic_value_enum(),
+            operand_2.as_basic_value_enum(),
+            modulo.as_basic_value_enum(),
+        ],
         "add_mod_call",
     ))
 }
@@ -27,14 +34,20 @@ where
 ///
 pub fn mul_mod<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 3],
+    operand_1: inkwell::values::IntValue<'ctx>,
+    operand_2: inkwell::values::IntValue<'ctx>,
+    modulo: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
     Ok(context.build_call(
         context.runtime.mul_mod,
-        &[arguments[0], arguments[1], arguments[2]],
+        &[
+            operand_1.as_basic_value_enum(),
+            operand_2.as_basic_value_enum(),
+            modulo.as_basic_value_enum(),
+        ],
         "mul_mod_call",
     ))
 }
@@ -44,7 +57,8 @@ where
 ///
 pub fn exponent<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    value: inkwell::values::IntValue<'ctx>,
+    exponent: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -56,9 +70,9 @@ where
     let join_block = context.append_basic_block("exponent_loop_join");
 
     let factor_pointer = context.build_alloca(context.field_type(), "exponent_factor");
-    context.build_store(factor_pointer, arguments[0]);
+    context.build_store(factor_pointer, value);
     let power_pointer = context.build_alloca(context.field_type(), "exponent_loop_power_pointer");
-    context.build_store(power_pointer, arguments[1]);
+    context.build_store(power_pointer, exponent);
     let result_pointer = context.build_alloca(context.field_type(), "exponent_result");
     context.build_store(result_pointer, context.field_const(1));
     context.build_unconditional_branch(condition_block);
@@ -133,14 +147,15 @@ where
 ///
 pub fn sign_extend<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    bytes: inkwell::values::IntValue<'ctx>,
+    value: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
     Ok(context.build_call(
         context.runtime.sign_extend,
-        &[arguments[0], arguments[1]],
+        &[bytes.as_basic_value_enum(), value.as_basic_value_enum()],
         "sign_extend_call",
     ))
 }

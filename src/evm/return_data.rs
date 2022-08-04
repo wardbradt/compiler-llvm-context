@@ -36,13 +36,15 @@ where
 ///
 pub fn copy<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 3],
+    destination_offset: inkwell::values::IntValue<'ctx>,
+    source_offset: inkwell::values::IntValue<'ctx>,
+    size: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
     let destination = context.access_memory(
-        arguments[0].into_int_value(),
+        destination_offset,
         AddressSpace::Heap,
         "return_data_copy_destination_pointer",
     );
@@ -57,7 +59,7 @@ where
     );
     let child_offset = context.build_load(child_offset_pointer, "return_data_copy_child_offset");
     let source_offset = context.builder().build_int_add(
-        arguments[1].into_int_value(),
+        source_offset,
         child_offset.into_int_value(),
         "return_data_copy_source_offset",
     );
@@ -66,8 +68,6 @@ where
         AddressSpace::Child,
         "return_data_copy_source_pointer",
     );
-
-    let size = arguments[2].into_int_value();
 
     context.build_memcpy(
         IntrinsicFunction::MemoryCopyFromChild,

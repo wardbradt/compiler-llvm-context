@@ -6,6 +6,7 @@ pub mod arithmetic;
 pub mod bitwise;
 pub mod calldata;
 pub mod comparison;
+pub mod context;
 pub mod contract;
 pub mod create;
 pub mod ether_gas;

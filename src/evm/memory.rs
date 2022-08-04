@@ -11,16 +11,12 @@ use crate::Dependency;
 ///
 pub fn load<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 1],
+    offset: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
-    let pointer = context.access_memory(
-        arguments[0].into_int_value(),
-        AddressSpace::Heap,
-        "memory_load_pointer",
-    );
+    let pointer = context.access_memory(offset, AddressSpace::Heap, "memory_load_pointer");
     let result = context.build_load(pointer, "memory_load_result");
     Ok(Some(result))
 }
@@ -30,14 +26,14 @@ where
 ///
 pub fn store<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    offset: inkwell::values::IntValue<'ctx>,
+    value: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
-    let offset = arguments[0].into_int_value();
     let pointer = context.access_memory(offset, AddressSpace::Heap, "memory_store_pointer");
-    context.build_store(pointer, arguments[1]);
+    context.build_store(pointer, value);
 
     Ok(None)
 }
@@ -47,13 +43,14 @@ where
 ///
 pub fn store_byte<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 2],
+    offset: inkwell::values::IntValue<'ctx>,
+    value: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
     let pointer = context.access_memory(
-        arguments[0].into_int_value(),
+        offset,
         AddressSpace::Heap,
         "memory_store_byte_original_value_pointer",
     );
@@ -74,7 +71,7 @@ where
     );
 
     let value_shifted = context.builder().build_left_shift(
-        arguments[1].into_int_value(),
+        value,
         context.field_const(
             ((compiler_common::SIZE_FIELD - 1) * compiler_common::BITLENGTH_BYTE) as u64,
         ),

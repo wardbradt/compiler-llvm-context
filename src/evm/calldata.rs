@@ -14,7 +14,7 @@ use crate::Dependency;
 ///
 pub fn load<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 1],
+    offset: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -28,11 +28,10 @@ where
         "calldata_parent_offset_pointer",
     );
     let parent_offset = context.build_load(parent_offset_pointer, "calldata_parent_offset");
-    let offset = context.builder().build_int_add(
-        arguments[0].into_int_value(),
-        parent_offset.into_int_value(),
-        "calldata_offset",
-    );
+    let offset =
+        context
+            .builder()
+            .build_int_add(offset, parent_offset.into_int_value(), "calldata_offset");
 
     let pointer = context.access_memory(offset, AddressSpace::Parent, "calldata_pointer");
     let value = context.build_load(pointer, "calldata_value");
@@ -67,7 +66,9 @@ where
 ///
 pub fn copy<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    arguments: [inkwell::values::BasicValueEnum<'ctx>; 3],
+    destination_offset: inkwell::values::IntValue<'ctx>,
+    source_offset: inkwell::values::IntValue<'ctx>,
+    size: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -76,7 +77,6 @@ where
     let default_block = context.append_basic_block("calldata_copy_default_block");
     let join_block = context.append_basic_block("calldata_copy_join_block");
 
-    let destination_offset = arguments[0].into_int_value();
     let destination = context.access_memory(
         destination_offset,
         AddressSpace::Heap,
@@ -92,21 +92,18 @@ where
         "calldata_copy_parent_offset_pointer",
     );
     let parent_offset = context.build_load(parent_offset_pointer, "calldata_copy_parent_offset");
-    let source_offset = arguments[1].into_int_value();
     let combined_offset = context.builder().build_int_add(
         source_offset,
         parent_offset.into_int_value(),
         "calldata_copy_combined_offset",
     );
 
-    let size = arguments[2].into_int_value();
-
     let calldata_size = self::size(context)?
         .expect("Always exists")
         .into_int_value();
     let is_source_calldata_size = context.builder().build_int_compare(
         inkwell::IntPredicate::EQ,
-        arguments[1].into_int_value(),
+        source_offset,
         calldata_size,
         "calldata_copy_is_source_calldata_size",
     );
