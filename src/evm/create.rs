@@ -145,6 +145,7 @@ fn call_deployer<'ctx, D>(
 where
     D: Dependency,
 {
+    let error_block = context.append_basic_block("deployer_call_error_block");
     let success_block = context.append_basic_block("deployer_call_success_block");
     let join_block = context.append_basic_block("deployer_call_join_block");
 
@@ -263,49 +264,58 @@ where
         context.field_const(u64::MAX as u64),
         "deployer_call_child_data_offset",
     );
-    let child_data_length_shifted = context.builder().build_right_shift(
-        result_abi_data.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        false,
-        "deployer_call_child_data_length_shifted",
+    let address_or_status_code_pointer = context.access_memory(
+        child_data_offset,
+        AddressSpace::Child,
+        "deployer_call_address_or_status_code_pointer",
     );
-    let child_data_length = context.builder().build_and(
-        child_data_length_shifted,
-        context.field_const(u64::MAX as u64),
-        "deployer_call_child_data_length",
+    let address_or_status_code = context.build_load(
+        address_or_status_code_pointer,
+        "deployer_call_address_or_status_code",
     );
-    context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
-
-    let result_status_code_pointer = unsafe {
-        context.builder().build_gep(
-            far_call_result_pointer.into_pointer_value(),
-            &[
-                context.field_const(0),
-                context
-                    .integer_type(compiler_common::BITLENGTH_X32)
-                    .const_int(1, false),
-            ],
-            "deployer_call_result_status_code_pointer",
-        )
-    };
-    let result_status_code_boolean = context.build_load(
-        result_status_code_pointer,
-        "deployer_call_result_status_code_boolean",
+    let is_address_or_status_code_non_zero = context.builder().build_int_compare(
+        inkwell::IntPredicate::NE,
+        address_or_status_code.into_int_value(),
+        context.field_const(0),
+        "deployer_call_is_address_or_status_code_non_zero",
     );
     context.build_conditional_branch(
-        result_status_code_boolean.into_int_value(),
+        is_address_or_status_code_non_zero,
         success_block,
-        join_block,
+        error_block,
     );
 
     context.set_basic_block(success_block);
-    let child_data_pointer = context.access_memory(
+    context.build_store(result_pointer, address_or_status_code);
+    context.build_unconditional_branch(join_block);
+
+    context.set_basic_block(error_block);
+    let child_return_data_offset = context.builder().build_int_add(
         child_data_offset,
-        AddressSpace::Child,
-        "deployer_call_child_pointer",
+        context.field_const((compiler_common::SIZE_FIELD as u64) * 3),
+        "deployer_call_child_return_data_offset",
     );
-    let child_data_value = context.build_load(child_data_pointer, "deployer_call_child_address");
-    context.build_store(result_pointer, child_data_value);
+    let child_return_data_length_offset = context.builder().build_int_add(
+        child_data_offset,
+        context.field_const((compiler_common::SIZE_FIELD as u64) * 2),
+        "deployer_call_child_return_data_length_offset",
+    );
+    let child_return_data_length_pointer = context.access_memory(
+        child_return_data_length_offset,
+        AddressSpace::Child,
+        "deployer_call_child_return_data_length_pointer",
+    );
+    let child_return_data_length = context
+        .build_load(
+            child_return_data_length_pointer,
+            "deployer_call_child_return_data_length",
+        )
+        .into_int_value();
+    context.write_abi_data(
+        child_return_data_offset,
+        child_return_data_length,
+        AddressSpace::Child,
+    );
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(join_block);
