@@ -62,7 +62,25 @@ where
             context.field_const_str(compiler_common::ABI_ADDRESS_ACCOUNT_CODE_STORAGE),
             "check_address_is_account_code_storage",
         );
-        context.build_conditional_branch(address_is_account_code_storage, join_block, call_block);
+        let caller = context
+            .build_call(
+                context.get_intrinsic_function(IntrinsicFunction::Caller),
+                &[],
+                "check_extcodesize_msg_sender",
+            )
+            .expect("Always exists");
+        let caller_is_bootloader = context.builder().build_int_compare(
+            inkwell::IntPredicate::EQ,
+            caller.into_int_value(),
+            context.field_const_str(compiler_common::ABI_ADDRESS_BOOTLOADER),
+            "check_msg_sender_is_bootloader",
+        );
+        let is_check_excluded = context.builder().build_or(
+            address_is_account_code_storage,
+            caller_is_bootloader,
+            "check_extcodesize_is_excluded",
+        );
+        context.build_conditional_branch(is_check_excluded, join_block, call_block);
 
         context.set_basic_block(call_block);
         let extcodesize =
