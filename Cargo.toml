@@ -22,9 +22,9 @@ sha2 = "0.10"
 sha3 = "0.10"
 md5 = "0.7"
 
-zkevm-assembly = { git = "https://github.com/matter-labs/zkEVM-assembly", branch = "v1.1.1" }
+zkevm-assembly = { git = "https://github.com/matter-labs/zkEVM-assembly", branch = "v1.1.2" }
 
-compiler-common = { git = "https://github.com/matter-labs/compiler-common", branch = "vm1.1" }
+compiler-common = { git = "https://github.com/matter-labs/compiler-common", branch = "vm1.2" }
 
 #compiler-common = { path = "../compiler-common" }
 
