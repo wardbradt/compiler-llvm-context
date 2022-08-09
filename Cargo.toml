@@ -24,7 +24,7 @@ md5 = "0.7"
 
 zkevm-assembly = { git = "https://github.com/matter-labs/zkEVM-assembly", branch = "v1.1.1" }
 
-compiler-common = { git = "https://github.com/matter-labs/compiler-common" }
+compiler-common = { git = "https://github.com/matter-labs/compiler-common", branch = "vm1.1" }
 
 #compiler-common = { path = "../compiler-common" }
 
