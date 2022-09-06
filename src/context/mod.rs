@@ -12,6 +12,7 @@ pub mod function;
 pub mod r#loop;
 pub mod optimizer;
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::RwLock;
@@ -73,6 +74,9 @@ where
     /// The immutables size tracker. Stores the size in bytes.
     /// Does not take into account the size of the indexes.
     immutables_size: usize,
+    /// The immutables identifier-to-offset mapping. Is only used by Solidity due to
+    /// the arbitrariness of its identifiers.
+    immutables: BTreeMap<String, usize>,
 }
 
 impl<'ctx, D> Context<'ctx, D>
@@ -116,6 +120,7 @@ where
 
             evm_data: None,
             immutables_size: 0,
+            immutables: BTreeMap::new(),
         }
     }
 
@@ -192,20 +197,14 @@ where
                 )
             })?;
 
-        let bytecode: Vec<u8> = assembly
-            .clone()
-            .compile_to_bytecode()?
-            .into_iter()
-            .flatten()
-            .collect();
+        let bytecode_words = assembly.clone().compile_to_bytecode()?;
+        let hash = zkevm_opcode_defs::utils::bytecode_to_code_hash(bytecode_words.as_slice())
+            .map(hex::encode)
+            .map_err(|_error| {
+                anyhow::anyhow!("The contract `{}` bytecode hashing error", contract_path,)
+            })?;
 
-        let hash = crate::hashes::bytecode_hash(bytecode.as_slice()).map_err(|error| {
-            anyhow::anyhow!(
-                "The contract `{}` bytecode hashing error: {}",
-                contract_path,
-                error
-            )
-        })?;
+        let bytecode = bytecode_words.into_iter().flatten().collect();
 
         Ok(Build::new(assembly_text, assembly, bytecode, hash))
     }
@@ -498,6 +497,44 @@ where
     }
 
     ///
+    /// Returns the value of a global variable.
+    ///
+    pub fn get_global(&self, name: &str) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
+        match self.module.get_global(name) {
+            Some(global) => {
+                let value = self.build_load(
+                    global.as_pointer_value(),
+                    format!("global_value_{}", name).as_str(),
+                );
+                Ok(value)
+            }
+            None => anyhow::bail!("Global variable {} is not declared", name),
+        }
+    }
+
+    ///
+    /// Sets the value to a global variable.
+    ///
+    pub fn set_global<V: BasicValue<'ctx>>(&self, name: &str, value: V) {
+        let pointer = match self.module.get_global(name) {
+            Some(global) => global.as_pointer_value(),
+            None => {
+                let r#type = value.as_basic_value_enum().get_type();
+                let global = self
+                    .module
+                    .add_global(r#type, Some(AddressSpace::Stack.into()), name);
+                global.set_linkage(inkwell::module::Linkage::Private);
+                global.set_visibility(inkwell::GlobalVisibility::Default);
+                global.set_externally_initialized(false);
+
+                global.set_initializer(&r#type.const_zero());
+                global.as_pointer_value()
+            }
+        };
+        self.build_store(pointer, value);
+    }
+
+    ///
     /// Pushes a new loop context to the stack.
     ///
     pub fn push_loop(
@@ -748,16 +785,12 @@ where
         &self,
         function: inkwell::values::FunctionValue<'ctx>,
         mut arguments: Vec<inkwell::values::BasicValueEnum<'ctx>>,
-        error_block: inkwell::basic_block::BasicBlock<'ctx>,
         name: &str,
     ) -> Option<inkwell::values::BasicValueEnum<'ctx>> {
-        let catch_block = self.append_basic_block("catch_block");
-        let join_block = self.append_basic_block("join_block");
-        let current_block = self.basic_block();
-
         let result_type = self
             .structure_type(vec![
-                self.integer_type(compiler_common::BITLENGTH_FIELD)
+                self.integer_type(compiler_common::BITLENGTH_BYTE)
+                    .ptr_type(AddressSpace::Generic.into())
                     .as_basic_type_enum(),
                 self.integer_type(compiler_common::BITLENGTH_BOOLEAN)
                     .as_basic_type_enum(),
@@ -766,43 +799,7 @@ where
         let result_pointer = self.build_alloca(result_type, "far_call_result_pointer");
         arguments.push(result_pointer.as_basic_value_enum());
 
-        self.set_basic_block(catch_block);
-        let landing_pad_type = self.structure_type(vec![
-            self.integer_type(compiler_common::BITLENGTH_BYTE)
-                .ptr_type(AddressSpace::Stack.into())
-                .as_basic_type_enum(),
-            self.integer_type(compiler_common::BITLENGTH_X32)
-                .as_basic_type_enum(),
-        ]);
-        self.builder.build_landing_pad(
-            landing_pad_type,
-            self.runtime.personality,
-            &[self
-                .integer_type(compiler_common::BITLENGTH_BYTE)
-                .ptr_type(AddressSpace::Stack.into())
-                .const_zero()
-                .as_basic_value_enum()],
-            false,
-            "landing",
-        );
-        self.write_abi_data(
-            self.field_const(0),
-            self.field_const(0),
-            AddressSpace::Child,
-        );
-        self.build_unconditional_branch(error_block);
-
-        self.set_basic_block(current_block);
-        let call_site_value = self.builder.build_invoke(
-            function,
-            arguments.as_slice(),
-            join_block,
-            catch_block,
-            name,
-        );
-        self.modify_call_site_value(arguments.as_slice(), call_site_value);
-        self.set_basic_block(join_block);
-        call_site_value.try_as_basic_value().left()
+        self.build_call(function, arguments.as_slice(), name)
     }
 
     ///
@@ -964,23 +961,41 @@ where
     ) {
         let offset = self.builder.build_and(
             offset,
-            self.field_const(u64::MAX),
+            self.field_const(u32::MAX as u64),
             "contract_exit_offset_truncated",
         );
         let length = self.builder.build_and(
             length,
-            self.field_const(u64::MAX),
+            self.field_const(u32::MAX as u64),
             "contract_exit_length_truncated",
         );
 
+        let offset_shifted = self.builder.build_left_shift(
+            offset,
+            self.field_const((compiler_common::BITLENGTH_X32 * 2) as u64),
+            "contract_exit_offset_shifted",
+        );
         let length_shifted = self.builder.build_left_shift(
             length,
-            self.field_const(compiler_common::BITLENGTH_X64 as u64),
+            self.field_const((compiler_common::BITLENGTH_X32 * 3) as u64),
             "contract_exit_length_shifted",
         );
-        let abi_data = self
-            .builder
-            .build_int_add(length_shifted, offset, "contract_exit_abi_data");
+
+        let mut abi_data =
+            self.builder
+                .build_int_add(offset_shifted, length_shifted, "contract_exit_abi_data");
+        if let (CodeType::Deploy, IntrinsicFunction::Return) = (self.code_type(), return_function) {
+            let auxiliary_heap_marker_shifted = self.builder().build_left_shift(
+                self.field_const(zkevm_opcode_defs::RetForwardPageType::UseAuxHeap as u64),
+                self.field_const((compiler_common::BITLENGTH_X32 * 7) as u64),
+                "contract_exit_abi_data_heap_auxiliary_marker_shifted",
+            );
+            abi_data = self.builder().build_int_add(
+                abi_data,
+                auxiliary_heap_marker_shifted,
+                "contract_exit_abi_data_add_heap_auxiliary_marker",
+            );
+        }
 
         self.build_call(
             self.get_intrinsic_function(return_function),
@@ -991,129 +1006,83 @@ where
     }
 
     ///
-    /// Builds a long contract exit with message sequence.
+    /// Writes the calldata ABI data to the specified global variables.
     ///
-    pub fn build_exit_with_message(&self, return_function: IntrinsicFunction, message: &str) {
-        let length_shifted = self.builder.build_left_shift(
-            self.field_const(compiler_common::SIZE_X64 as u64),
-            self.field_const(compiler_common::BITLENGTH_X64 as u64),
-            "contract_exit_with_message_length_shifted",
-        );
-        let abi_data = self.builder.build_int_add(
-            length_shifted,
-            self.field_const(0),
-            "contract_exit_with_message_abi_data",
-        );
+    pub fn write_abi_calldata(&self, pointer: inkwell::values::PointerValue<'ctx>) {
+        self.set_global(crate::r#const::GLOBAL_CALLDATA_ABI, pointer);
 
-        let error_hash = crate::hashes::keccak256(message.as_bytes());
-        let error_code = self.field_const_str(error_hash.as_str());
-        let error_code_shifted = self.builder.build_left_shift(
-            error_code,
-            self.field_const(
-                (compiler_common::BITLENGTH_BYTE
-                    * (compiler_common::SIZE_FIELD - compiler_common::SIZE_X32))
-                    as u64,
-            ),
-            "contract_exit_with_message_error_code_shifted",
+        let abi_pointer_value =
+            self.builder()
+                .build_ptr_to_int(pointer, self.field_type(), "abi_pointer_value");
+        let abi_pointer_value_shifted = self.builder().build_right_shift(
+            abi_pointer_value,
+            self.field_const((compiler_common::BITLENGTH_X32 * 3) as u64),
+            false,
+            "abi_pointer_value_shifted",
         );
-        let parent_error_code_pointer = self.access_memory(
-            self.field_const(0),
-            AddressSpace::Heap,
-            "contract_exit_with_message_error_code_pointer",
+        let abi_length_value = self.builder().build_and(
+            abi_pointer_value_shifted,
+            self.field_const(u32::MAX as u64),
+            "abi_length_value",
         );
-        self.build_store(parent_error_code_pointer, error_code_shifted);
-
-        self.build_call(
-            self.get_intrinsic_function(return_function),
-            &[abi_data.as_basic_value_enum()],
-            format!("contract_exit_with_message_{}", return_function.name()).as_str(),
-        );
-        self.build_unreachable();
+        self.set_global(crate::r#const::GLOBAL_CALLDATA_SIZE, abi_length_value);
     }
 
     ///
-    /// Reads the ABI data from the specified heap area.
+    /// Writes the return data ABI data to the specified global variables.
     ///
-    pub fn read_abi_data(&self, address_space: AddressSpace) -> inkwell::values::IntValue<'ctx> {
-        let (offset_offset, length_offset) = match address_space {
-            AddressSpace::Parent => (
-                compiler_common::ABI_MEMORY_OFFSET_CALLDATA_OFFSET,
-                compiler_common::ABI_MEMORY_OFFSET_CALLDATA_LENGTH,
-            ),
-            AddressSpace::Child => (
-                compiler_common::ABI_MEMORY_OFFSET_RETURN_DATA_OFFSET,
-                compiler_common::ABI_MEMORY_OFFSET_RETURN_DATA_LENGTH,
-            ),
-            address_space => panic!(
-                "Address space {:?} cannot be accesses via the ABI data",
-                address_space
-            ),
-        };
+    pub fn write_abi_return_data(&self, pointer: inkwell::values::PointerValue<'ctx>) {
+        self.set_global(crate::r#const::GLOBAL_RETURN_DATA_ABI, pointer);
 
-        let data_offset_pointer = self.access_memory(
-            self.field_const((offset_offset * compiler_common::SIZE_FIELD) as u64),
-            AddressSpace::Heap,
-            "data_offset_pointer",
+        let abi_pointer_value =
+            self.builder()
+                .build_ptr_to_int(pointer, self.field_type(), "abi_pointer_value");
+        let abi_pointer_value_shifted = self.builder().build_right_shift(
+            abi_pointer_value,
+            self.field_const((compiler_common::BITLENGTH_X32 * 3) as u64),
+            false,
+            "abi_pointer_value_shifted",
         );
-        let data_offset = self
-            .build_load(data_offset_pointer, "data_offset")
-            .into_int_value();
-
-        let data_length_pointer = self.access_memory(
-            self.field_const((length_offset * compiler_common::SIZE_FIELD) as u64),
-            AddressSpace::Heap,
-            "data_length_pointer",
+        let abi_length_value = self.builder().build_and(
+            abi_pointer_value_shifted,
+            self.field_const(u32::MAX as u64),
+            "abi_length_value",
         );
-        let data_length = self
-            .build_load(data_length_pointer, "data_length")
-            .into_int_value();
-        let data_length_shifted = self.builder.build_left_shift(
-            data_length,
-            self.field_const(compiler_common::BITLENGTH_X64 as u64),
-            "data_length_shifted",
-        );
-
-        self.builder
-            .build_int_add(data_offset, data_length_shifted, "data_merged")
+        self.set_global(crate::r#const::GLOBAL_RETURN_DATA_SIZE, abi_length_value);
     }
 
     ///
-    /// Writes the ABI data to the specified heap area.
+    /// Writes the deployer return data ABI data to the specified global variables.
     ///
-    pub fn write_abi_data(
-        &self,
-        offset: inkwell::values::IntValue<'ctx>,
-        length: inkwell::values::IntValue<'ctx>,
-        address_space: AddressSpace,
-    ) {
-        let (offset_offset, length_offset) = match address_space {
-            AddressSpace::Parent => (
-                compiler_common::ABI_MEMORY_OFFSET_CALLDATA_OFFSET,
-                compiler_common::ABI_MEMORY_OFFSET_CALLDATA_LENGTH,
-            ),
-            AddressSpace::Child => (
-                compiler_common::ABI_MEMORY_OFFSET_RETURN_DATA_OFFSET,
-                compiler_common::ABI_MEMORY_OFFSET_RETURN_DATA_LENGTH,
-            ),
-            address_space => panic!(
-                "Address space {:?} cannot be accesses via the ABI data",
-                address_space
-            ),
+    pub fn write_abi_return_data_deployer(&self, pointer: inkwell::values::PointerValue<'ctx>) {
+        let revert_data_length_offset = self.field_const((compiler_common::SIZE_FIELD * 2) as u64);
+        let revert_data_length_pointer = unsafe {
+            self.builder().build_gep(
+                pointer,
+                &[revert_data_length_offset],
+                "deployer_revert_data_length_pointer",
+            )
         };
-
-        let offset_pointer = self.access_memory(
-            self.field_const((offset_offset * compiler_common::SIZE_FIELD) as u64),
-            AddressSpace::Heap,
-            "offset_pointer",
+        let revert_data_length_pointer_casted = self.builder().build_pointer_cast(
+            revert_data_length_pointer,
+            self.field_type().ptr_type(AddressSpace::Generic.into()),
+            "deployer_revert_data_length_pointer_casted",
         );
-        self.build_store(offset_pointer, offset);
-
-        let length_pointer = self.access_memory(
-            self.field_const((length_offset * compiler_common::SIZE_FIELD) as u64),
-            AddressSpace::Heap,
-            "length_pointer",
+        let revert_data_length = self.build_load(
+            revert_data_length_pointer_casted,
+            "deployer_revert_data_length",
         );
-        self.build_store(length_pointer, length);
+
+        let revert_data_offset = self.field_const((compiler_common::SIZE_FIELD * 3) as u64);
+        let revert_data_pointer = unsafe {
+            self.builder().build_gep(
+                pointer,
+                &[revert_data_offset],
+                "deployer_revert_data_pointer_shifted",
+            )
+        };
+        self.set_global(crate::r#const::GLOBAL_RETURN_DATA_ABI, revert_data_pointer);
+        self.set_global(crate::r#const::GLOBAL_RETURN_DATA_SIZE, revert_data_length);
     }
 
     ///
@@ -1382,18 +1351,51 @@ where
     }
 
     ///
-    /// Returns the current immutable size.
+    /// Returns the current number of immutables values in the contract.
+    ///
+    /// If the size is set manually, then it is returned. Otherwise, the number of elements in
+    /// the identifier-to-offset mapping tree is returned.
     ///
     pub fn immutable_size(&self) -> usize {
-        self.immutables_size
+        if self.immutables_size > 0 {
+            self.immutables_size
+        } else {
+            self.immutables.len() * compiler_common::SIZE_FIELD
+        }
     }
 
     ///
-    /// Updates the current immutable size.
+    /// Allocates memory for an immutable value in the auxiliary heap.
     ///
-    pub fn update_immutable_size(&mut self, value: usize) {
-        if value > self.immutables_size {
-            self.immutables_size = value;
+    /// If the identifier is already known, just returns its offset.
+    ///
+    pub fn allocate_immutable(&mut self, identifier: &str) -> usize {
+        let number_of_elements = self.immutables.len();
+        let new_offset = number_of_elements * compiler_common::SIZE_FIELD;
+        *self
+            .immutables
+            .entry(identifier.to_owned())
+            .or_insert(new_offset)
+    }
+
+    ///
+    /// Gets the offset of the immutable value.
+    ///
+    /// If the value is not yet allocated, it is forcibly allocated.
+    ///
+    pub fn get_immutable(&mut self, identifier: &str) -> usize {
+        match self.immutables.get(identifier).copied() {
+            Some(offset) => offset,
+            None => self.allocate_immutable(identifier),
         }
+    }
+
+    ///
+    /// Sets the current immutable size.
+    ///
+    /// Only used for Vyper, where the size of immutables in known in advance.
+    ///
+    pub fn set_immutable_size(&mut self, value: usize) {
+        self.immutables_size = value;
     }
 }

@@ -3,7 +3,6 @@
 //!
 
 use inkwell::types::BasicType;
-use inkwell::values::BasicValue;
 
 use crate::context::address_space::AddressSpace;
 use crate::context::function::runtime::Runtime;
@@ -20,14 +19,30 @@ use crate::WriteLLVM;
 pub struct Entry {}
 
 impl Entry {
-    /// The calldata offset argument index.
-    pub const ARGUMENT_INDEX_CALLDATA_OFFSET: usize = 0;
-
-    /// The calldata length argument index.
-    pub const ARGUMENT_INDEX_CALLDATA_LENGTH: usize = 1;
+    /// The calldata ABI argument index.
+    pub const ARGUMENT_INDEX_CALLDATA_ABI: usize = 0;
 
     /// The deploy code call flag argument index.
-    pub const ARGUMENT_INDEX_IS_DEPLOY_CALL: usize = 2;
+    pub const ARGUMENT_INDEX_IS_DEPLOY_CALL: usize = 1;
+
+    ///
+    /// Initializes the global variables.
+    ///
+    /// The pointers are not initialized, because it's not possible to create a null pointer.
+    ///
+    pub fn initialize_globals<D>(context: &mut Context<D>) -> anyhow::Result<()>
+    where
+        D: Dependency,
+    {
+        context.set_global(crate::GLOBAL_CALLDATA_SIZE, context.field_const(0));
+        context.set_global(crate::GLOBAL_RETURN_DATA_SIZE, context.field_const(0));
+        context.set_global(
+            crate::GLOBAL_TEMP_SIMULATOR_MSG_VALUE,
+            context.field_const(0),
+        );
+        context.set_global(crate::GLOBAL_TEMP_SIMULATOR_ADDRESS, context.field_const(0));
+        Ok(())
+    }
 }
 
 impl<D> WriteLLVM<D> for Entry
@@ -38,8 +53,10 @@ where
         let function_type = context.function_type(
             1,
             vec![
-                context.field_type().as_basic_type_enum(),
-                context.field_type().as_basic_type_enum(),
+                context
+                    .integer_type(compiler_common::BITLENGTH_BYTE)
+                    .ptr_type(AddressSpace::Generic.into())
+                    .as_basic_type_enum(),
                 context
                     .integer_type(compiler_common::BITLENGTH_BOOLEAN)
                     .as_basic_type_enum(),
@@ -77,24 +94,25 @@ where
             .ok_or_else(|| anyhow::anyhow!("Contract runtime code not found"))?;
 
         context.set_basic_block(context.function().entry_block);
-        let calldata_offset = context
+        Self::initialize_globals(context)?;
+
+        let calldata_abi = context
             .function()
             .value
-            .get_nth_param(Self::ARGUMENT_INDEX_CALLDATA_OFFSET as u32)
+            .get_nth_param(Self::ARGUMENT_INDEX_CALLDATA_ABI as u32)
             .expect("Always exists")
-            .into_int_value();
-        let calldata_offset = context.builder().build_and(
-            calldata_offset,
-            context.field_const(((1 << 24) - 1) as u64),
-            "calldata_offset_masked",
-        );
-        let calldata_length = context
-            .function()
-            .value
-            .get_nth_param(Self::ARGUMENT_INDEX_CALLDATA_LENGTH as u32)
-            .expect("Always exists")
-            .into_int_value();
-        context.write_abi_data(calldata_offset, calldata_length, AddressSpace::Parent);
+            .into_pointer_value();
+        context.write_abi_calldata(calldata_abi);
+        let calldata_length = context.get_global(crate::r#const::GLOBAL_CALLDATA_SIZE)?;
+        let return_data_abi = unsafe {
+            context.builder().build_gep(
+                calldata_abi,
+                &[calldata_length.into_int_value()],
+                "return_data_abi_initializer",
+            )
+        };
+        context.write_abi_return_data(return_data_abi);
+
         let is_deploy_code_call = context
             .function()
             .value
@@ -116,10 +134,7 @@ where
         context.build_unconditional_branch(context.function().return_block);
 
         context.set_basic_block(context.function().return_block);
-        let return_value = context
-            .read_abi_data(AddressSpace::Parent)
-            .as_basic_value_enum();
-        context.build_return(Some(&return_value));
+        context.build_return(Some(&context.field_const(0)));
 
         Ok(())
     }

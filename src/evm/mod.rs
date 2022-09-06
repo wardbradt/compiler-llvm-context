@@ -31,14 +31,14 @@ use crate::context::Context;
 use crate::Dependency;
 
 ///
-/// Stores the temporarily rewritten values in a safe heap space.
+/// Stores the temporarily rewritten values in safe global variables.
 ///
 pub fn save_and_write_extra_data<'ctx, D>(
     context: &mut Context<'ctx, D>,
     source_offset: inkwell::values::IntValue<'ctx>,
     value: inkwell::values::IntValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
-) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
+) -> anyhow::Result<()>
 where
     D: Dependency,
 {
@@ -67,20 +67,50 @@ where
     );
     context.build_store(address_pointer, address);
 
-    let value_saved_data_pointer = context.access_memory(
-        context.field_const(compiler_common::ABI_MEMORY_OFFSET_ABI_VALUE_TEMPORARY_DATA as u64),
-        AddressSpace::Heap,
-        "save_and_write_extra_data_value_saved_data_pointer",
+    context.set_global(
+        crate::r#const::GLOBAL_TEMP_SIMULATOR_MSG_VALUE,
+        value_saved_data,
     );
-    context.build_store(value_saved_data_pointer, value_saved_data);
-    let address_saved_data_pointer = context.access_memory(
-        context.field_const(compiler_common::ABI_MEMORY_OFFSET_ABI_ADDRESS_TEMPORARY_DATA as u64),
-        AddressSpace::Heap,
-        "save_and_write_extra_data_address_saved_data_pointer",
+    context.set_global(
+        crate::r#const::GLOBAL_TEMP_SIMULATOR_ADDRESS,
+        address_saved_data,
     );
-    context.build_store(address_saved_data_pointer, address_saved_data);
 
-    Ok(None)
+    Ok(())
+}
+
+///
+/// Restores the cells overwritten by the extra data for a `msg.value` simulator call.
+///
+pub fn restore_extra_data<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    source_offset: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<()>
+where
+    D: Dependency,
+{
+    let value_pointer = context.access_memory(
+        source_offset,
+        AddressSpace::Heap,
+        "save_and_write_extra_data_value_pointer",
+    );
+    let value_value = context.get_global(crate::r#const::GLOBAL_TEMP_SIMULATOR_MSG_VALUE)?;
+    context.build_store(value_pointer, value_value);
+
+    let address_offset = context.builder().build_int_add(
+        source_offset,
+        context.field_const(compiler_common::SIZE_FIELD as u64),
+        "save_and_write_extra_data_address_offset",
+    );
+    let address_pointer = context.access_memory(
+        address_offset,
+        AddressSpace::Heap,
+        "save_and_write_extra_data_address_pointer",
+    );
+    let address_value = context.get_global(crate::r#const::GLOBAL_TEMP_SIMULATOR_ADDRESS)?;
+    context.build_store(address_pointer, address_value);
+
+    Ok(())
 }
 
 ///

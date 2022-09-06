@@ -22,11 +22,8 @@ where
     match context.code_type() {
         CodeType::Deploy => {
             let immutables_offset_pointer = context.access_memory(
-                context.field_const(
-                    (compiler_common::ABI_MEMORY_OFFSET_CONSTRUCTOR_RETURN_DATA
-                        * compiler_common::SIZE_FIELD) as u64,
-                ),
-                AddressSpace::Heap,
+                context.field_const(crate::r#const::HEAP_AUX_OFFSET_CONSTRUCTOR_RETURN_DATA),
+                AddressSpace::HeapAuxiliary,
                 "immutables_offset_pointer",
             );
             context.build_store(
@@ -36,10 +33,10 @@ where
 
             let immutables_number_pointer = context.access_memory(
                 context.field_const(
-                    ((compiler_common::ABI_MEMORY_OFFSET_CONSTRUCTOR_RETURN_DATA + 1)
-                        * compiler_common::SIZE_FIELD) as u64,
+                    crate::r#const::HEAP_AUX_OFFSET_CONSTRUCTOR_RETURN_DATA
+                        + (compiler_common::SIZE_FIELD as u64),
                 ),
-                AddressSpace::Heap,
+                AddressSpace::HeapAuxiliary,
                 "immutables_number_pointer",
             );
             let immutable_values_size = context.immutable_size();
@@ -60,10 +57,7 @@ where
 
             context.build_exit(
                 IntrinsicFunction::Return,
-                context.field_const(
-                    (compiler_common::ABI_MEMORY_OFFSET_CONSTRUCTOR_RETURN_DATA
-                        * compiler_common::SIZE_FIELD) as u64,
-                ),
+                context.field_const(crate::r#const::HEAP_AUX_OFFSET_CONSTRUCTOR_RETURN_DATA),
                 return_data_length,
             );
         }

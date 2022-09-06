@@ -59,7 +59,7 @@ where
         let address_is_account_code_storage = context.builder().build_int_compare(
             inkwell::IntPredicate::EQ,
             address.into_int_value(),
-            context.field_const_str(compiler_common::ABI_ADDRESS_ACCOUNT_CODE_STORAGE),
+            context.field_const_str(compiler_common::ADDRESS_ACCOUNT_CODE_STORAGE),
             "check_address_is_account_code_storage",
         );
         let caller = context
@@ -72,7 +72,7 @@ where
         let caller_is_bootloader = context.builder().build_int_compare(
             inkwell::IntPredicate::EQ,
             caller.into_int_value(),
-            context.field_const_str(compiler_common::ABI_ADDRESS_BOOTLOADER),
+            context.field_const_str(compiler_common::ADDRESS_BOOTLOADER),
             "check_msg_sender_is_bootloader",
         );
         let is_check_excluded = context.builder().build_or(

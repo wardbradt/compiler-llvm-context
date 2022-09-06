@@ -27,6 +27,7 @@ pub fn create<'ctx, D>(
     value: inkwell::values::IntValue<'ctx>,
     input_offset: inkwell::values::IntValue<'ctx>,
     input_length: inkwell::values::IntValue<'ctx>,
+    address_space: AddressSpace,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -38,6 +39,7 @@ where
         input_length,
         "create(bytes32,bytes32,uint256,bytes)",
         None,
+        address_space,
     )?;
 
     Ok(Some(address.as_basic_value_enum()))
@@ -52,6 +54,7 @@ pub fn create2<'ctx, D>(
     input_offset: inkwell::values::IntValue<'ctx>,
     input_length: inkwell::values::IntValue<'ctx>,
     salt: Option<inkwell::values::IntValue<'ctx>>,
+    address_space: AddressSpace,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -63,6 +66,7 @@ where
         input_length,
         "create2(bytes32,bytes32,uint256,bytes)",
         salt,
+        address_space,
     )?;
 
     Ok(Some(address.as_basic_value_enum()))
@@ -141,6 +145,7 @@ fn call_deployer<'ctx, D>(
     input_length: inkwell::values::IntValue<'ctx>,
     signature: &'static str,
     salt: Option<inkwell::values::IntValue<'ctx>>,
+    address_space: AddressSpace,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -149,21 +154,18 @@ where
     let success_block = context.append_basic_block("deployer_call_success_block");
     let join_block = context.append_basic_block("deployer_call_join_block");
 
-    let input_length_shifted = context.builder().build_left_shift(
-        input_length,
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        "deployer_call_input_length_shifted",
-    );
-    let abi_data = context.builder().build_int_add(
-        input_length_shifted,
+    let abi_data = crate::evm::contract::abi_data(
+        context,
         input_offset,
-        "deployer_call_abi_data",
-    );
+        input_length,
+        context.field_const(0),
+        address_space,
+    )?;
 
     let signature_hash = crate::hashes::keccak256(signature.as_bytes());
     let signature_pointer = context.access_memory(
         input_offset,
-        AddressSpace::Heap,
+        address_space,
         "deployer_call_signature_pointer",
     );
     let signature_value = context.field_const_str(signature_hash.as_str());
@@ -174,11 +176,8 @@ where
         context.field_const(compiler_common::SIZE_X32 as u64),
         "deployer_call_salt_offset",
     );
-    let salt_pointer = context.access_memory(
-        salt_offset,
-        AddressSpace::Heap,
-        "deployer_call_salt_pointer",
-    );
+    let salt_pointer =
+        context.access_memory(salt_offset, address_space, "deployer_call_salt_pointer");
     let salt_value = salt.unwrap_or_else(|| context.field_const(0));
     context.build_store(salt_pointer, salt_value);
 
@@ -187,11 +186,8 @@ where
         context.field_const((compiler_common::SIZE_FIELD * 2) as u64),
         "deployer_call_value_offset",
     );
-    let value_pointer = context.access_memory(
-        value_offset,
-        AddressSpace::Heap,
-        "deployer_call_value_pointer",
-    );
+    let value_pointer =
+        context.access_memory(value_offset, address_space, "deployer_call_value_pointer");
     context.build_store(value_pointer, value);
 
     let arguments_offset_offset = context.builder().build_int_add(
@@ -201,7 +197,7 @@ where
     );
     let arguments_offset_pointer = context.access_memory(
         arguments_offset_offset,
-        AddressSpace::Heap,
+        address_space,
         "deployer_call_arguments_offset_pointer",
     );
     context.build_store(
@@ -218,7 +214,7 @@ where
     );
     let arguments_length_pointer = context.access_memory(
         arguments_length_offset,
-        AddressSpace::Heap,
+        address_space,
         "deployer_call_arguments_length_pointer",
     );
     let arguments_length_value = context.builder().build_int_sub(
@@ -235,12 +231,11 @@ where
         .build_invoke_far_call(
             context.runtime.far_call,
             vec![
-                context
-                    .field_const_str(compiler_common::ABI_ADDRESS_CONTRACT_DEPLOYER)
-                    .as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
+                context
+                    .field_const_str(compiler_common::ADDRESS_CONTRACT_DEPLOYER)
+                    .as_basic_value_enum(),
             ],
-            join_block,
             "deployer_call",
         )
         .expect("Always returns a value");
@@ -259,18 +254,14 @@ where
     };
     let result_abi_data =
         context.build_load(result_abi_data_pointer, "deployer_call_result_abi_data");
-    let child_data_offset = context.builder().build_and(
-        result_abi_data.into_int_value(),
-        context.field_const(u64::MAX as u64),
-        "deployer_call_child_data_offset",
+    let result_abi_data_casted = context.builder().build_pointer_cast(
+        result_abi_data.into_pointer_value(),
+        context.field_type().ptr_type(AddressSpace::Generic.into()),
+        "deployer_call_result_abi_data_casted",
     );
-    let address_or_status_code_pointer = context.access_memory(
-        child_data_offset,
-        AddressSpace::Child,
-        "deployer_call_address_or_status_code_pointer",
-    );
+
     let address_or_status_code = context.build_load(
-        address_or_status_code_pointer,
+        result_abi_data_casted,
         "deployer_call_address_or_status_code",
     );
     let is_address_or_status_code_non_zero = context.builder().build_int_compare(
@@ -290,32 +281,7 @@ where
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(error_block);
-    let child_return_data_offset = context.builder().build_int_add(
-        child_data_offset,
-        context.field_const((compiler_common::SIZE_FIELD as u64) * 3),
-        "deployer_call_child_return_data_offset",
-    );
-    let child_return_data_length_offset = context.builder().build_int_add(
-        child_data_offset,
-        context.field_const((compiler_common::SIZE_FIELD as u64) * 2),
-        "deployer_call_child_return_data_length_offset",
-    );
-    let child_return_data_length_pointer = context.access_memory(
-        child_return_data_length_offset,
-        AddressSpace::Child,
-        "deployer_call_child_return_data_length_pointer",
-    );
-    let child_return_data_length = context
-        .build_load(
-            child_return_data_length_pointer,
-            "deployer_call_child_return_data_length",
-        )
-        .into_int_value();
-    context.write_abi_data(
-        child_return_data_offset,
-        child_return_data_length,
-        AddressSpace::Child,
-    );
+    context.write_abi_return_data_deployer(result_abi_data.into_pointer_value());
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(join_block);

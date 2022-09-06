@@ -2,6 +2,7 @@
 //! The LLVM context library.
 //!
 
+pub(crate) mod r#const;
 pub(crate) mod context;
 pub(crate) mod dump_flag;
 pub(crate) mod evm;
@@ -48,8 +49,15 @@ pub use self::evm::r#return;
 pub use self::evm::return_data;
 pub use self::evm::storage;
 pub use self::evm::verbatim;
-pub use self::hashes::bytecode_hash;
 pub use self::hashes::keccak256;
+pub use self::r#const::GLOBAL_CALLDATA_ABI;
+pub use self::r#const::GLOBAL_CALLDATA_SIZE;
+pub use self::r#const::GLOBAL_RETURN_DATA_ABI;
+pub use self::r#const::GLOBAL_RETURN_DATA_SIZE;
+pub use self::r#const::GLOBAL_TEMP_SIMULATOR_ADDRESS;
+pub use self::r#const::GLOBAL_TEMP_SIMULATOR_MSG_VALUE;
+pub use self::r#const::HEAP_AUX_OFFSET_CONSTRUCTOR_RETURN_DATA;
+pub use self::r#const::HEAP_AUX_OFFSET_EXTERNAL_CALL;
 
 use std::sync::Arc;
 use std::sync::RwLock;

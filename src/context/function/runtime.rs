@@ -37,9 +37,6 @@ pub struct Runtime<'ctx> {
     pub delegate_call: inkwell::values::FunctionValue<'ctx>,
     /// The `__mimiccall` runtime function.
     pub mimic_call: inkwell::values::FunctionValue<'ctx>,
-
-    /// The `__memset_uma_as1` runtime function.
-    pub memset_uma_heap: inkwell::values::FunctionValue<'ctx>,
 }
 
 impl<'ctx> Runtime<'ctx> {
@@ -84,9 +81,6 @@ impl<'ctx> Runtime<'ctx> {
 
     /// The `__mimiccall` runtime function name.
     pub const FUNCTION_MIMICCALL: &'static str = "__mimiccall";
-
-    /// The `__memset_uma_as1` runtime function name.
-    pub const FUNCTION_MEMSET_UMA_HEAP: &'static str = "__memset_uma_as1";
 
     ///
     /// A shortcut constructor.
@@ -204,7 +198,8 @@ impl<'ctx> Runtime<'ctx> {
         let external_call_result_type = llvm
             .struct_type(
                 &[
-                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_BYTE as u32)
+                        .ptr_type(AddressSpace::Generic.into())
                         .as_basic_type_enum(),
                     llvm.bool_type().as_basic_type_enum(),
                 ],
@@ -280,26 +275,6 @@ impl<'ctx> Runtime<'ctx> {
             Some(inkwell::module::Linkage::External),
         );
 
-        let memset_uma_heap = module.add_function(
-            Self::FUNCTION_MEMSET_UMA_HEAP,
-            llvm.void_type().fn_type(
-                &[
-                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .ptr_type(AddressSpace::Heap.into())
-                        .as_basic_type_enum()
-                        .into(),
-                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum()
-                        .into(),
-                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
-                        .as_basic_type_enum()
-                        .into(),
-                ],
-                false,
-            ),
-            Some(inkwell::module::Linkage::External),
-        );
-
         Self {
             personality,
             cxa_throw,
@@ -316,8 +291,6 @@ impl<'ctx> Runtime<'ctx> {
             static_call,
             delegate_call,
             mimic_call,
-
-            memset_uma_heap,
         }
     }
 

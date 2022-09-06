@@ -32,26 +32,25 @@ where
     D: Dependency,
 {
     if let Some(address_simulation) = crate::evm::parse_llvm_constant(address) {
-        if crate::evm::parse_address(compiler_common::ABI_ADDRESS_TO_L1) == address_simulation {
+        if crate::evm::parse_address(compiler_common::ADDRESS_TO_L1) == address_simulation {
             let is_first = gas;
             let in_0 = value.unwrap_or_else(|| context.field_const(0));
             let in_1 = input_offset;
             return simulation::to_l1(context, is_first, in_0, in_1).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_CODE_ADDRESS)
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_CODE_ADDRESS)
             == address_simulation
         {
             return simulation::code_source(context).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_PRECOMPILE)
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_PRECOMPILE)
             == address_simulation
         {
             let in_0 = gas;
             let ergs_left = input_offset;
 
             return simulation::precompile(context, in_0, ergs_left).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_META) == address_simulation
-        {
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_META) == address_simulation {
             return simulation::meta(context).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_MIMIC_CALL)
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_MIMIC_CALL)
             == address_simulation
         {
             let address = gas;
@@ -59,7 +58,7 @@ where
             let abi_data = input_offset;
 
             return simulation::mimic_call(context, address, mimic, abi_data).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_SYSTEM_CALL)
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_SYSTEM_CALL)
             == address_simulation
         {
             let address = gas;
@@ -74,7 +73,7 @@ where
                 output_length,
             )
             .map(Some);
-        } else if crate::evm::parse_address(compiler_common::ABI_ADDRESS_SET_CONTEXT_VALUE_CALL)
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_SET_CONTEXT_VALUE_CALL)
             == address_simulation
         {
             let value = value.unwrap_or_else(|| context.field_const(0));
@@ -94,7 +93,7 @@ where
         address,
         ordinary_block,
         &[(
-            context.field_const_str(compiler_common::SOLIDITY_ADDRESS_IDENTITY),
+            context.field_const_str(compiler_common::ADDRESS_IDENTITY),
             identity_block,
         )],
     );
@@ -129,6 +128,7 @@ where
             input_length,
             output_offset,
             output_length,
+            None,
         )
     }?;
     context.build_store(result_pointer, result);
@@ -160,6 +160,77 @@ where
             .resolve_library(path.as_str())?
             .as_basic_value_enum(),
     ))
+}
+
+///
+/// Generates an ABI data for a default call.
+///
+pub fn abi_data<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    input_offset: inkwell::values::IntValue<'ctx>,
+    input_length: inkwell::values::IntValue<'ctx>,
+    gas: inkwell::values::IntValue<'ctx>,
+    address_space: AddressSpace,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let input_offset_truncated = context.builder().build_and(
+        input_offset,
+        context.field_const(u32::MAX as u64),
+        "abi_data_input_offset_truncated",
+    );
+    let input_length_truncated = context.builder().build_and(
+        input_length,
+        context.field_const(u32::MAX as u64),
+        "abi_data_input_length_truncated",
+    );
+    let gas_truncated = context.builder().build_and(
+        gas,
+        context.field_const(u32::MAX as u64),
+        "abi_data_gas_truncated",
+    );
+
+    let input_offset_shifted = context.builder().build_left_shift(
+        input_offset_truncated,
+        context.field_const((compiler_common::BITLENGTH_X32 * 2) as u64),
+        "abi_data_input_offset_shifted",
+    );
+    let input_length_shifted = context.builder().build_left_shift(
+        input_length_truncated,
+        context.field_const((compiler_common::BITLENGTH_X32 * 3) as u64),
+        "abi_data_input_length_shifted",
+    );
+    let gas_shifted = context.builder().build_left_shift(
+        gas_truncated,
+        context.field_const((compiler_common::BITLENGTH_X32 * 6) as u64),
+        "abi_data_gas_shifted",
+    );
+
+    let mut abi_data = context.builder().build_int_add(
+        input_offset_shifted,
+        input_length_shifted,
+        "abi_data_offset_and_length",
+    );
+    abi_data = context
+        .builder()
+        .build_int_add(abi_data, gas_shifted, "abi_data_add_gas");
+    if let AddressSpace::HeapAuxiliary = address_space {
+        let auxiliary_heap_marker_shifted = context.builder().build_left_shift(
+            context.field_const(zkevm_opcode_defs::FarCallForwardPageType::UseAuxHeap as u64),
+            context.field_const(
+                (compiler_common::BITLENGTH_X32 * 7 + compiler_common::BITLENGTH_BYTE) as u64,
+            ),
+            "abi_data_auxiliary_heap_marker_shifted",
+        );
+        abi_data = context.builder().build_int_add(
+            abi_data,
+            auxiliary_heap_marker_shifted,
+            "abi_data_add_heap_auxiliary_marker",
+        );
+    }
+
+    Ok(abi_data.as_basic_value_enum())
 }
 
 ///
@@ -211,11 +282,12 @@ where
         context,
         function,
         gas,
-        context.field_const_str_hex(compiler_common::ABI_ADDRESS_MSG_VALUE),
+        context.field_const_str_hex(compiler_common::ADDRESS_MSG_VALUE),
         input_offset,
         input_length_with_extra,
         output_offset,
         output_length,
+        Some(extra_data_offset),
     )?;
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(value_join_block);
@@ -230,6 +302,7 @@ where
         input_length,
         output_offset,
         output_length,
+        None,
     )?;
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(value_join_block);
@@ -252,6 +325,7 @@ fn call_default<'ctx, D>(
     input_length: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
+    restore_extra_data_offset: Option<inkwell::values::IntValue<'ctx>>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -264,16 +338,16 @@ where
     );
     context.build_store(status_code_result_pointer, context.field_const(0));
 
-    let abi_data = abi_data(context, gas, input_offset, input_length)?.into_int_value();
+    let abi_data =
+        abi_data(context, input_offset, input_length, gas, AddressSpace::Heap)?.into_int_value();
 
     let result_pointer = context
         .build_invoke_far_call(
             function,
             vec![
-                address.as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
+                address.as_basic_value_enum(),
             ],
-            join_block,
             "contract_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
@@ -293,6 +367,11 @@ where
     let result_abi_data = context.build_load(
         result_abi_data_pointer,
         "contract_call_external_result_abi_data",
+    );
+    let result_abi_data_casted = context.builder().build_pointer_cast(
+        result_abi_data.into_pointer_value(),
+        context.field_type().ptr_type(AddressSpace::Generic.into()),
+        "contract_call_external_result_abi_data_casted",
     );
 
     let result_status_code_pointer = unsafe {
@@ -318,27 +397,7 @@ where
     );
     context.build_store(status_code_result_pointer, result_status_code);
 
-    let child_data_offset = context.builder().build_and(
-        result_abi_data.into_int_value(),
-        context.field_const(u64::MAX as u64),
-        "contract_call_child_data_offset",
-    );
-    let child_data_length_shifted = context.builder().build_right_shift(
-        result_abi_data.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        false,
-        "contract_call_child_data_length_shifted",
-    );
-    let child_data_length = context.builder().build_and(
-        child_data_length_shifted,
-        context.field_const(u64::MAX as u64),
-        "contract_call_child_data_length",
-    );
-    let source = context.access_memory(
-        child_data_offset,
-        AddressSpace::Child,
-        "contract_call_source",
-    );
+    let source = result_abi_data_casted;
 
     let destination = context.access_memory(
         output_offset,
@@ -346,15 +405,18 @@ where
         "contract_call_destination",
     );
 
+    if let Some(restore_extra_data_offset) = restore_extra_data_offset {
+        crate::evm::restore_extra_data(context, restore_extra_data_offset)?;
+    }
     context.build_memcpy(
-        IntrinsicFunction::MemoryCopyFromChild,
+        IntrinsicFunction::MemoryCopyFromGeneric,
         destination,
         source,
         output_length,
         "contract_call_memcpy_from_child",
     );
 
-    context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
+    context.write_abi_return_data(result_abi_data.into_pointer_value());
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(join_block);
@@ -418,11 +480,10 @@ where
         .build_invoke_far_call(
             function,
             vec![
-                address.as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
+                address.as_basic_value_enum(),
                 mimic.as_basic_value_enum(),
             ],
-            join_block,
             "mimic_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
@@ -467,24 +528,7 @@ where
     );
     context.build_store(status_code_result_pointer, result_status_code);
 
-    let child_data_offset = context.builder().build_and(
-        result_abi_data.into_int_value(),
-        context.field_const(u64::MAX as u64),
-        "mimic_call_child_data_offset",
-    );
-    let child_data_length_shifted = context.builder().build_right_shift(
-        result_abi_data.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        false,
-        "mimic_call_child_data_length_shifted",
-    );
-    let child_data_length = context.builder().build_and(
-        child_data_length_shifted,
-        context.field_const(u64::MAX as u64),
-        "mimic_call_child_data_length",
-    );
-
-    context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
+    context.write_abi_return_data(result_abi_data.into_pointer_value());
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(join_block);
@@ -519,10 +563,9 @@ where
         .build_invoke_far_call(
             function,
             vec![
-                address.as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
+                address.as_basic_value_enum(),
             ],
-            join_block,
             "system_far_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
@@ -542,6 +585,11 @@ where
     let result_abi_data = context.build_load(
         result_abi_data_pointer,
         "system_far_call_external_result_abi_data",
+    );
+    let result_abi_data_casted = context.builder().build_pointer_cast(
+        result_abi_data.into_pointer_value(),
+        context.field_type().ptr_type(AddressSpace::Generic.into()),
+        "system_far_call_external_result_abi_data_casted",
     );
 
     let result_status_code_pointer = unsafe {
@@ -567,27 +615,7 @@ where
     );
     context.build_store(status_code_result_pointer, result_status_code);
 
-    let child_data_offset = context.builder().build_and(
-        result_abi_data.into_int_value(),
-        context.field_const(u64::MAX as u64),
-        "system_far_call_child_data_offset",
-    );
-    let child_data_length_shifted = context.builder().build_right_shift(
-        result_abi_data.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        false,
-        "system_far_call_child_data_length_shifted",
-    );
-    let child_data_length = context.builder().build_and(
-        child_data_length_shifted,
-        context.field_const(u64::MAX as u64),
-        "system_far_call_child_data_length",
-    );
-    let source = context.access_memory(
-        child_data_offset,
-        AddressSpace::Child,
-        "system_far_call_source",
-    );
+    let source = result_abi_data_casted;
 
     let destination = context.access_memory(
         output_offset,
@@ -596,68 +624,18 @@ where
     );
 
     context.build_memcpy(
-        IntrinsicFunction::MemoryCopyFromChild,
+        IntrinsicFunction::MemoryCopyFromGeneric,
         destination,
         source,
         output_length,
         "system_far_call_memcpy_from_child",
     );
 
-    context.write_abi_data(child_data_offset, child_data_length, AddressSpace::Child);
+    context.write_abi_return_data(result_abi_data.into_pointer_value());
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(join_block);
     let status_code_result =
         context.build_load(status_code_result_pointer, "system_call_status_code");
     Ok(status_code_result)
-}
-
-///
-/// Generates an ABI data for default call
-///
-fn abi_data<'ctx, D>(
-    context: &mut Context<'ctx, D>,
-    gas: inkwell::values::IntValue<'ctx>,
-    input_offset: inkwell::values::IntValue<'ctx>,
-    input_length: inkwell::values::IntValue<'ctx>,
-) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
-where
-    D: Dependency,
-{
-    let input_offset_truncated = context.builder().build_and(
-        input_offset,
-        context.field_const(u64::MAX as u64),
-        "abi_data_input_offset_truncated",
-    );
-    let input_length_truncated = context.builder().build_and(
-        input_length,
-        context.field_const(u32::MAX as u64),
-        "abi_data_input_length_truncated",
-    );
-    let gas_truncated = context.builder().build_and(
-        gas,
-        context.field_const(u32::MAX as u64),
-        "abi_data_gas_truncated",
-    );
-    let gas_shifted = context.builder().build_left_shift(
-        gas_truncated,
-        context.field_const(compiler_common::BITLENGTH_X32 as u64),
-        "abi_data_gas_shifted",
-    );
-    let gas_add_input_length = context.builder().build_int_add(
-        gas_shifted,
-        input_length_truncated,
-        "abi_data_gas_add_input_length",
-    );
-    let gas_add_input_length_shifted = context.builder().build_left_shift(
-        gas_add_input_length,
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        "abi_data_gas_add_input_length_shifted",
-    );
-    let abi_data = context.builder().build_int_add(
-        gas_add_input_length_shifted,
-        input_offset_truncated,
-        "abi_data_result",
-    );
-    Ok(abi_data.as_basic_value_enum())
 }

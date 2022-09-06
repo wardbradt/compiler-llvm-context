@@ -11,10 +11,10 @@ pub enum AddressSpace {
     Stack,
     /// The heap memory.
     Heap,
-    /// The shared parent contract memory.
-    Parent,
-    /// The shared child contract memory.
-    Child,
+    /// The auxiliary heap memory.
+    HeapAuxiliary,
+    /// The generic memory page.
+    Generic,
 }
 
 impl From<AddressSpace> for inkwell::AddressSpace {
@@ -22,8 +22,8 @@ impl From<AddressSpace> for inkwell::AddressSpace {
         match value {
             AddressSpace::Stack => Self::Zero,
             AddressSpace::Heap => Self::One,
-            AddressSpace::Parent => Self::Two,
-            AddressSpace::Child => Self::Three,
+            AddressSpace::HeapAuxiliary => Self::Two,
+            AddressSpace::Generic => Self::Three,
         }
     }
 }

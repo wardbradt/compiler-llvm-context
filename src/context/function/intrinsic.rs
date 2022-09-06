@@ -30,8 +30,6 @@ pub enum Intrinsic {
     CodeSource,
     /// The other data, including the block information and VM state.
     Meta,
-    /// The transaction origin.
-    TxOrigin,
     /// The remaining amount of ergs.
     ErgsLeft,
     /// The abstract `u128` getter.
@@ -46,10 +44,8 @@ pub enum Intrinsic {
 
     /// The memory copy within the heap.
     MemoryCopy,
-    /// The memory copy from parent.
-    MemoryCopyFromParent,
-    /// The memory copy from child.
-    MemoryCopyFromChild,
+    /// The memory copy from a generic page.
+    MemoryCopyFromGeneric,
 }
 
 impl Intrinsic {
@@ -67,7 +63,6 @@ impl Intrinsic {
             Intrinsic::Caller => "llvm.syncvm.caller",
             Intrinsic::CodeSource => "llvm.syncvm.codesource",
             Intrinsic::Meta => "llvm.syncvm.meta",
-            Intrinsic::TxOrigin => "llvm.syncvm.txorigin",
             Intrinsic::ErgsLeft => "llvm.syncvm.ergsleft",
             Intrinsic::GetU128 => "llvm.syncvm.getu128",
             Intrinsic::SetU128 => "llvm.syncvm.setu128",
@@ -76,8 +71,7 @@ impl Intrinsic {
             Intrinsic::Revert => "llvm.syncvm.revert",
 
             Intrinsic::MemoryCopy => "llvm.memcpy",
-            Intrinsic::MemoryCopyFromParent => "llvm.memcpy",
-            Intrinsic::MemoryCopyFromChild => "llvm.memcpy",
+            Intrinsic::MemoryCopyFromGeneric => "llvm.memcpy",
         }
     }
 
@@ -103,25 +97,14 @@ impl Intrinsic {
                     .as_basic_type_enum(),
                 context.field_type().as_basic_type_enum(),
             ],
-            Self::MemoryCopyFromParent => vec![
+            Self::MemoryCopyFromGeneric => vec![
                 context
                     .field_type()
                     .ptr_type(AddressSpace::Heap.into())
                     .as_basic_type_enum(),
                 context
                     .field_type()
-                    .ptr_type(AddressSpace::Parent.into())
-                    .as_basic_type_enum(),
-                context.field_type().as_basic_type_enum(),
-            ],
-            Self::MemoryCopyFromChild => vec![
-                context
-                    .field_type()
-                    .ptr_type(AddressSpace::Heap.into())
-                    .as_basic_type_enum(),
-                context
-                    .field_type()
-                    .ptr_type(AddressSpace::Child.into())
+                    .ptr_type(AddressSpace::Generic.into())
                     .as_basic_type_enum(),
                 context.field_type().as_basic_type_enum(),
             ],

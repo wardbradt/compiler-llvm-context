@@ -28,13 +28,16 @@ where
             let offset_absolute = context.builder().build_int_add(
                 index_double,
                 context.field_const(
-                    ((compiler_common::ABI_MEMORY_OFFSET_CONSTRUCTOR_RETURN_DATA + 3)
-                        * compiler_common::SIZE_FIELD) as u64,
+                    crate::r#const::HEAP_AUX_OFFSET_CONSTRUCTOR_RETURN_DATA
+                        + (3 * compiler_common::SIZE_FIELD) as u64,
                 ),
                 "immutable_offset_absolute",
             );
-            let immutable_pointer =
-                context.access_memory(offset_absolute, AddressSpace::Heap, "immutable_pointer");
+            let immutable_pointer = context.access_memory(
+                offset_absolute,
+                AddressSpace::HeapAuxiliary,
+                "immutable_pointer",
+            );
             let immutable_value = context.build_load(immutable_pointer, "immutable_value");
             Ok(Some(immutable_value))
         }
@@ -49,7 +52,7 @@ where
                 .into_int_value();
             crate::evm::contract::request::request(
                 context,
-                context.field_const_str(compiler_common::ABI_ADDRESS_IMMUTABLE_SIMULATOR),
+                context.field_const_str(compiler_common::ADDRESS_IMMUTABLE_SIMULATOR),
                 "getImmutable(address,uint256)",
                 vec![code_address, index],
             )
@@ -79,14 +82,14 @@ where
             let index_offset_absolute = context.builder().build_int_add(
                 index_double,
                 context.field_const(
-                    ((compiler_common::ABI_MEMORY_OFFSET_CONSTRUCTOR_RETURN_DATA + 2)
-                        * compiler_common::SIZE_FIELD) as u64,
+                    crate::r#const::HEAP_AUX_OFFSET_CONSTRUCTOR_RETURN_DATA
+                        + (2 * compiler_common::SIZE_FIELD) as u64,
                 ),
                 "index_offset_absolute",
             );
             let index_offset_pointer = context.access_memory(
                 index_offset_absolute,
-                AddressSpace::Heap,
+                AddressSpace::HeapAuxiliary,
                 "immutable_index_pointer",
             );
             context.build_store(index_offset_pointer, index);
@@ -98,7 +101,7 @@ where
             );
             let value_offset_pointer = context.access_memory(
                 value_offset_absolute,
-                AddressSpace::Heap,
+                AddressSpace::HeapAuxiliary,
                 "immutable_value_pointer",
             );
             context.build_store(value_offset_pointer, value);

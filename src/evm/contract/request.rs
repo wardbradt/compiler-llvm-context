@@ -24,25 +24,24 @@ where
     let call_success_block = context.append_basic_block("call_success_block");
     let call_join_block = context.append_basic_block("call_join_block");
 
-    let input_offset = context.field_const(
-        (compiler_common::ABI_MEMORY_OFFSET_ARBITRARY_EXTERNAL_CALL_SPACE
-            * compiler_common::SIZE_FIELD) as u64,
+    let input_offset = context.field_const(crate::r#const::HEAP_AUX_OFFSET_EXTERNAL_CALL);
+    let input_length = context.field_const(
+        (compiler_common::SIZE_X32 + (compiler_common::SIZE_FIELD * arguments.len())) as u64,
     );
-    let input_length_shifted = context.builder().build_left_shift(
-        context.field_const(
-            (compiler_common::SIZE_X32 + (compiler_common::SIZE_FIELD * arguments.len())) as u64,
-        ),
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        "call_input_length_shifted",
-    );
-    let abi_data =
-        context
-            .builder()
-            .build_int_add(input_length_shifted, input_offset, "call_abi_data");
+    let abi_data = crate::evm::contract::abi_data(
+        context,
+        input_offset,
+        input_length,
+        context.field_const(0),
+        AddressSpace::HeapAuxiliary,
+    )?;
 
     let signature_hash = crate::hashes::keccak256(signature.as_bytes());
-    let signature_pointer =
-        context.access_memory(input_offset, AddressSpace::Heap, "call_signature_pointer");
+    let signature_pointer = context.access_memory(
+        input_offset,
+        AddressSpace::HeapAuxiliary,
+        "call_signature_pointer",
+    );
     let signature_value = context.field_const_str(signature_hash.as_str());
     context.build_store(signature_pointer, signature_value);
 
@@ -56,7 +55,7 @@ where
         );
         let arguments_pointer = context.access_memory(
             arguments_offset,
-            AddressSpace::Heap,
+            AddressSpace::HeapAuxiliary,
             format!("call_argument_{}_pointer", index).as_str(),
         );
         context.build_store(arguments_pointer, argument);
@@ -65,7 +64,8 @@ where
     let result_type = context
         .structure_type(vec![
             context
-                .integer_type(compiler_common::BITLENGTH_FIELD)
+                .integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Generic.into())
                 .as_basic_type_enum(),
             context
                 .integer_type(compiler_common::BITLENGTH_BOOLEAN)
@@ -78,8 +78,8 @@ where
         .build_call(
             context.runtime.static_call,
             &[
-                address.as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
+                address.as_basic_value_enum(),
                 result_pointer.as_basic_value_enum(),
             ],
             "call",
@@ -99,10 +99,10 @@ where
         )
     };
     let result_abi_data = context.build_load(result_abi_data_pointer, "call_result_abi_data");
-    let child_data_offset = context.builder().build_and(
-        result_abi_data.into_int_value(),
-        context.field_const(u64::MAX as u64),
-        "call_child_data_offset",
+    let result_abi_data_casted = context.builder().build_pointer_cast(
+        result_abi_data.into_pointer_value(),
+        context.field_type().ptr_type(AddressSpace::Generic.into()),
+        "call_result_abi_data_casted",
     );
 
     let result_status_code_pointer = unsafe {
@@ -130,9 +130,7 @@ where
     );
 
     context.set_basic_block(call_success_block);
-    let child_data_pointer =
-        context.access_memory(child_data_offset, AddressSpace::Child, "call_child_pointer");
-    let child_data_value = context.build_load(child_data_pointer, "call_child_address");
+    let child_data_value = context.build_load(result_abi_data_casted, "call_child_address");
     context.build_store(return_pointer, child_data_value);
     context.build_unconditional_branch(call_join_block);
 

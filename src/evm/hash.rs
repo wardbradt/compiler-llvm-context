@@ -16,7 +16,7 @@ use crate::Dependency;
 pub fn keccak256<'ctx, D>(
     context: &mut Context<'ctx, D>,
     input_offset: inkwell::values::IntValue<'ctx>,
-    input_size: inkwell::values::IntValue<'ctx>,
+    input_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
@@ -25,23 +25,20 @@ where
     let failure_block = context.append_basic_block("keccak256_failure_block");
     let join_block = context.append_basic_block("keccak256_failure_block");
 
-    let input_size_shifted = context.builder().build_left_shift(
-        input_size,
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
-        "keccak256_call_input_size_shifted",
-    );
-    let abi_data = context.builder().build_int_add(
-        input_size_shifted,
+    let abi_data = crate::evm::contract::abi_data(
+        context,
         input_offset,
-        "keccak256_call_abi_data",
-    );
-
-    let address = context.field_const_str(compiler_common::ABI_ADDRESS_KECCAK256);
+        input_length,
+        context.field_const(0),
+        AddressSpace::Heap,
+    )?;
+    let address = context.field_const_str(compiler_common::ADDRESS_KECCAK256);
 
     let result_type = context
         .structure_type(vec![
             context
-                .integer_type(compiler_common::BITLENGTH_FIELD)
+                .integer_type(compiler_common::BITLENGTH_BYTE)
+                .ptr_type(AddressSpace::Generic.into())
                 .as_basic_type_enum(),
             context
                 .integer_type(compiler_common::BITLENGTH_BOOLEAN)
@@ -54,8 +51,8 @@ where
         .build_call(
             context.runtime.static_call,
             &[
-                address.as_basic_value_enum(),
                 abi_data.as_basic_value_enum(),
+                address.as_basic_value_enum(),
                 result_pointer.as_basic_value_enum(),
             ],
             "keccak256_call_external",
@@ -73,10 +70,10 @@ where
         result_abi_data_pointer,
         "keccak256_call_external_result_abi_data",
     );
-    let child_data_offset = context.builder().build_and(
-        result_abi_data.into_int_value(),
-        context.field_const(u64::MAX as u64),
-        "keccak256_child_data_offset",
+    let result_abi_data_casted = context.builder().build_pointer_cast(
+        result_abi_data.into_pointer_value(),
+        context.field_type().ptr_type(AddressSpace::Generic.into()),
+        "keccak256_call_external_result_abi_data_casted",
     );
 
     let result_status_code_pointer = unsafe {
@@ -104,19 +101,19 @@ where
     );
 
     context.set_basic_block(success_block);
-    let child_pointer = context.access_memory(
-        child_data_offset,
-        AddressSpace::Child,
-        "keccak256_child_pointer",
-    );
-    let child_data = context.build_load(child_pointer, "keccak256_child_data");
+    let child_data = context.build_load(result_abi_data_casted, "keccak256_child_data");
     context.build_store(result_pointer, child_data);
     context.build_unconditional_branch(join_block);
 
     context.set_basic_block(failure_block);
+    let result_abi_data_value = context.builder().build_ptr_to_int(
+        result_abi_data.into_pointer_value(),
+        context.field_type(),
+        "keccak256_child_data_pointer_value",
+    );
     let child_data_length_shifted = context.builder().build_right_shift(
-        result_abi_data.into_int_value(),
-        context.field_const(compiler_common::BITLENGTH_X64 as u64),
+        result_abi_data_value,
+        context.field_const((compiler_common::BITLENGTH_X32 * 3) as u64),
         false,
         "keccak256_child_data_length_shifted",
     );
@@ -125,14 +122,14 @@ where
         context.field_const(u64::MAX as u64),
         "keccak256_child_data_length",
     );
-    let source = context.access_memory(child_data_offset, AddressSpace::Child, "keccak256_source");
+    let source = result_abi_data_casted;
     let destination = context.access_memory(
         context.field_const(0),
         AddressSpace::Heap,
         "keccak256_destination",
     );
     context.build_memcpy(
-        IntrinsicFunction::MemoryCopyFromChild,
+        IntrinsicFunction::MemoryCopyFromGeneric,
         destination,
         source,
         child_data_length,
@@ -145,6 +142,6 @@ where
     );
 
     context.set_basic_block(join_block);
-    let result = context.build_load(child_pointer, "keccak256_result");
+    let result = context.build_load(result_pointer, "keccak256_result");
     Ok(Some(result))
 }
