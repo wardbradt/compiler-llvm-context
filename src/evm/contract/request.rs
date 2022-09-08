@@ -6,6 +6,7 @@ use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
 use crate::context::address_space::AddressSpace;
+use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::Context;
 use crate::Dependency;
 
@@ -22,7 +23,7 @@ where
     D: Dependency,
 {
     let call_success_block = context.append_basic_block("call_success_block");
-    let call_join_block = context.append_basic_block("call_join_block");
+    let call_error_block = context.append_basic_block("call_error_block");
 
     let input_offset = context.field_const(crate::r#const::HEAP_AUX_OFFSET_EXTERNAL_CALL);
     let input_length = context.field_const(
@@ -126,15 +127,17 @@ where
     context.build_conditional_branch(
         result_status_code_boolean.into_int_value(),
         call_success_block,
-        call_join_block,
+        call_error_block,
+    );
+
+    context.set_basic_block(call_error_block);
+    context.build_exit(
+        IntrinsicFunction::Revert,
+        context.field_const(0),
+        context.field_const(0),
     );
 
     context.set_basic_block(call_success_block);
     let child_data_value = context.build_load(result_abi_data_casted, "call_child_address");
-    context.build_store(return_pointer, child_data_value);
-    context.build_unconditional_branch(call_join_block);
-
-    context.set_basic_block(call_join_block);
-    let result = context.build_load(return_pointer, "call_result");
-    Ok(result)
+    Ok(child_data_value)
 }
