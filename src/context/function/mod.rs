@@ -35,6 +35,8 @@ pub struct Function<'ctx> {
     pub r#return: Option<Return<'ctx>>,
     /// The stack representation.
     pub stack: HashMap<String, inkwell::values::PointerValue<'ctx>>,
+    /// The saved constants. Used for peculiar cases like call simulation.
+    pub constants: HashMap<String, num::BigUint>,
     /// The block-local variables. They are still allocated at the beginning of the function,
     /// but their parent block must be known in order to pass the implicit arguments thereto.
     /// Is only used by the Vyper LLL IR compiler.
@@ -75,6 +77,7 @@ impl<'ctx> Function<'ctx> {
 
             r#return,
             stack: HashMap::with_capacity(Self::STACK_HASHMAP_INITIAL_CAPACITY),
+            constants: HashMap::new(),
             label_arguments: HashMap::new(),
 
             evm_data: None,

@@ -3,6 +3,8 @@
 //!
 
 use inkwell::values::BasicValue;
+use num::BigUint;
+use num::ToPrimitive;
 
 use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::Context;
@@ -154,70 +156,54 @@ where
 }
 
 ///
-/// Generates a system call.
+/// Generates a raw far call.
 ///
-pub fn system_call<'ctx, D>(
+pub fn raw_far_call<'ctx, D>(
     context: &mut Context<'ctx, D>,
+    function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
     abi_data: inkwell::values::IntValue<'ctx>,
-    is_delegate: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
 {
-    let join_block = context.append_basic_block("system_call_join_block");
+    super::call_far_raw(
+        context,
+        function,
+        address,
+        abi_data,
+        output_offset,
+        output_length,
+    )
+}
 
-    let system_far_call_block = context.append_basic_block("system_far_call_block");
-    let system_delegate_call_block = context.append_basic_block("system_delegate_call_block");
-
-    let result_pointer = context.build_alloca(context.field_type(), "system_call_result_pointer");
-    context.build_store(result_pointer, context.field_const(0));
-
-    let is_delegate_equals_zero = context.builder().build_int_compare(
-        inkwell::IntPredicate::EQ,
-        is_delegate,
-        context.field_const(0),
-        "system_call_is_delegate_equals_zero",
-    );
-    context.build_conditional_branch(
-        is_delegate_equals_zero,
-        system_far_call_block,
-        system_delegate_call_block,
-    );
-
-    {
-        context.set_basic_block(system_far_call_block);
-        let result = super::call_system(
-            context,
-            context.runtime.far_call,
-            address,
-            abi_data,
-            output_offset,
-            output_length,
-        )?;
-        context.build_store(result_pointer, result);
-        context.build_unconditional_branch(join_block);
-    }
-
-    {
-        context.set_basic_block(system_delegate_call_block);
-        let result = super::call_system(
-            context,
-            context.runtime.delegate_call,
-            address,
-            abi_data,
-            output_offset,
-            output_length,
-        )?;
-        context.build_store(result_pointer, result);
-        context.build_unconditional_branch(join_block);
-    }
-
-    context.set_basic_block(join_block);
-    let result = context.build_load(result_pointer, "system_call_result");
-    Ok(result)
+///
+/// Generates a system call.
+///
+#[allow(clippy::too_many_arguments)]
+pub fn system_call<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    address: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::IntValue<'ctx>,
+    output_offset: inkwell::values::IntValue<'ctx>,
+    output_length: inkwell::values::IntValue<'ctx>,
+    extra_value_1: inkwell::values::IntValue<'ctx>,
+    extra_value_2: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    super::call_system(
+        context,
+        address,
+        abi_data,
+        output_offset,
+        output_length,
+        extra_value_1,
+        extra_value_2,
+    )
 }
 
 ///
@@ -236,4 +222,99 @@ where
         "contract_call_simulation_set_context_value",
     );
     Ok(context.field_const(1).as_basic_value_enum())
+}
+
+///
+/// Generates a public data price setter call.
+///
+pub fn set_pubdata_price<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    value: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    context.build_call(
+        context.get_intrinsic_function(IntrinsicFunction::SetPubdataPrice),
+        &[value.as_basic_value_enum()],
+        "contract_call_simulation_set_pubdata_price",
+    );
+    Ok(context.field_const(1).as_basic_value_enum())
+}
+
+///
+/// Generates a transaction counter increment call.
+///
+pub fn increment_tx_counter<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    context.build_call(
+        context.get_intrinsic_function(IntrinsicFunction::IncrementTxCounter),
+        &[],
+        "contract_call_simulation_increment_tx_counter",
+    );
+    Ok(context.field_const(1).as_basic_value_enum())
+}
+
+///
+/// Generates an extra ABI data getter call.
+///
+pub fn get_global<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    index: BigUint,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    match index.to_usize() {
+        Some(crate::r#const::GLOBAL_INDEX_CALLDATA_ABI) => {
+            let pointer = context.get_global(crate::r#const::GLOBAL_CALLDATA_ABI)?;
+            let value = context.builder().build_ptr_to_int(
+                pointer.into_pointer_value(),
+                context.field_type(),
+                "calldata_abi_integer",
+            );
+            Ok(value.as_basic_value_enum())
+        }
+        Some(crate::r#const::GLOBAL_INDEX_CALL_FLAGS) => {
+            context.get_global(crate::r#const::GLOBAL_CALL_FLAGS)
+        }
+        Some(
+            index @ crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_1
+            | index @ crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_2,
+        ) => {
+            let extra_abi_data_pointer =
+                context.get_global_ptr(crate::r#const::GLOBAL_EXTRA_ABI_DATA)?;
+            let extra_abi_data_index =
+                context.field_const((index - crate::r#const::EXTRA_ABI_DATA_SIZE) as u64);
+            let extra_abi_data_element_pointer = unsafe {
+                context.builder().build_gep(
+                    extra_abi_data_pointer,
+                    &[context.field_const(0), extra_abi_data_index],
+                    "extra_abi_data_element_pointer",
+                )
+            };
+            let extra_abi_data_element = context.build_load(
+                extra_abi_data_element_pointer,
+                "extra_abi_data_element_value",
+            );
+            Ok(extra_abi_data_element)
+        }
+        Some(crate::r#const::GLOBAL_INDEX_RETURN_DATA_ABI) => {
+            let pointer = context.get_global(crate::r#const::GLOBAL_RETURN_DATA_ABI)?;
+            let value = context.builder().build_ptr_to_int(
+                pointer.into_pointer_value(),
+                context.field_type(),
+                "return_data_abi_integer",
+            );
+            Ok(value.as_basic_value_enum())
+        }
+        _ => anyhow::bail!(
+            "Global variable `{}` is unknown to the call-simulation access",
+            index
+        ),
+    }
 }

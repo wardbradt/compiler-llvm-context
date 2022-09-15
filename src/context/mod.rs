@@ -500,14 +500,21 @@ where
     /// Returns the value of a global variable.
     ///
     pub fn get_global(&self, name: &str) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>> {
+        let global_pointer = self.get_global_ptr(name)?;
+        let global_value =
+            self.build_load(global_pointer, format!("global_value_{}", name).as_str());
+        Ok(global_value)
+    }
+
+    ///
+    /// Returns the pointer to a global variable.
+    ///
+    pub fn get_global_ptr(
+        &self,
+        name: &str,
+    ) -> anyhow::Result<inkwell::values::PointerValue<'ctx>> {
         match self.module.get_global(name) {
-            Some(global) => {
-                let value = self.build_load(
-                    global.as_pointer_value(),
-                    format!("global_value_{}", name).as_str(),
-                );
-                Ok(value)
-            }
+            Some(global) => Ok(global.as_pointer_value()),
             None => anyhow::bail!("Global variable {} is not declared", name),
         }
     }
@@ -1158,6 +1165,17 @@ where
     pub fn field_type(&self) -> inkwell::types::IntType<'ctx> {
         self.llvm
             .custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+    }
+
+    ///
+    /// Returns the array type with the specified length.
+    ///
+    pub fn array_type(
+        &self,
+        element_type: inkwell::types::BasicTypeEnum<'ctx>,
+        length: usize,
+    ) -> inkwell::types::ArrayType<'ctx> {
+        element_type.array_type(length as u32)
     }
 
     ///

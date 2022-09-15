@@ -31,3 +31,6 @@ where
 
     Ok(None)
 }
+
+/// The global getter identifier prefix.
+pub static GLOBAL_GETTER_PREFIX: &str = "get_global::";

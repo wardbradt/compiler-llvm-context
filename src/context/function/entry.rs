@@ -22,8 +22,14 @@ impl Entry {
     /// The calldata ABI argument index.
     pub const ARGUMENT_INDEX_CALLDATA_ABI: usize = 0;
 
-    /// The deploy code call flag argument index.
-    pub const ARGUMENT_INDEX_IS_DEPLOY_CALL: usize = 1;
+    /// The call flags argument index.
+    pub const ARGUMENT_INDEX_CALL_FLAGS: usize = 1;
+
+    /// The extra ABI data first argument index.
+    pub const ARGUMENT_INDEX_EXTRA_ABI_DATA_1: usize = 2;
+
+    /// The extra ABI data second argument index.
+    pub const ARGUMENT_INDEX_EXTRA_ABI_DATA_2: usize = 3;
 
     ///
     /// Initializes the global variables.
@@ -34,13 +40,21 @@ impl Entry {
     where
         D: Dependency,
     {
-        context.set_global(crate::GLOBAL_CALLDATA_SIZE, context.field_const(0));
-        context.set_global(crate::GLOBAL_RETURN_DATA_SIZE, context.field_const(0));
+        context.set_global(crate::r#const::GLOBAL_CALLDATA_SIZE, context.field_const(0));
         context.set_global(
-            crate::GLOBAL_TEMP_SIMULATOR_MSG_VALUE,
+            crate::r#const::GLOBAL_RETURN_DATA_SIZE,
             context.field_const(0),
         );
-        context.set_global(crate::GLOBAL_TEMP_SIMULATOR_ADDRESS, context.field_const(0));
+        context.set_global(crate::r#const::GLOBAL_CALL_FLAGS, context.field_const(0));
+        context.set_global(
+            crate::r#const::GLOBAL_EXTRA_ABI_DATA,
+            context
+                .array_type(
+                    context.field_type().as_basic_type_enum(),
+                    crate::r#const::EXTRA_ABI_DATA_SIZE,
+                )
+                .const_zero(),
+        );
         Ok(())
     }
 }
@@ -57,9 +71,9 @@ where
                     .integer_type(compiler_common::BITLENGTH_BYTE)
                     .ptr_type(AddressSpace::Generic.into())
                     .as_basic_type_enum(),
-                context
-                    .integer_type(compiler_common::BITLENGTH_BOOLEAN)
-                    .as_basic_type_enum(),
+                context.field_type().as_basic_type_enum(),
+                context.field_type().as_basic_type_enum(),
+                context.field_type().as_basic_type_enum(),
             ],
         );
         context.add_function(
@@ -113,14 +127,57 @@ where
         };
         context.write_abi_return_data(return_data_abi);
 
-        let is_deploy_code_call = context
+        let call_flags = context
             .function()
             .value
-            .get_nth_param(Self::ARGUMENT_INDEX_IS_DEPLOY_CALL as u32)
+            .get_nth_param(Self::ARGUMENT_INDEX_CALL_FLAGS as u32)
             .expect("Always exists")
             .into_int_value();
+        context.set_global(crate::r#const::GLOBAL_CALL_FLAGS, call_flags);
+
+        let extra_abi_data_pointer =
+            context.get_global_ptr(crate::r#const::GLOBAL_EXTRA_ABI_DATA)?;
+        for (array_index, argument_index) in [
+            Self::ARGUMENT_INDEX_EXTRA_ABI_DATA_1,
+            Self::ARGUMENT_INDEX_EXTRA_ABI_DATA_2,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let array_element_pointer = unsafe {
+                context.builder().build_gep(
+                    extra_abi_data_pointer,
+                    &[
+                        context.field_const(0),
+                        context
+                            .integer_type(compiler_common::BITLENGTH_X32)
+                            .const_int(array_index as u64, false),
+                    ],
+                    "extra_abi_data_array_element_pointer",
+                )
+            };
+            let argument_value = context
+                .function()
+                .value
+                .get_nth_param(argument_index as u32)
+                .expect("Always exists")
+                .into_int_value();
+            context.build_store(array_element_pointer, argument_value);
+        }
+
+        let is_deploy_call_flag_truncated = context.builder().build_and(
+            call_flags,
+            context.field_const(1),
+            "is_deploy_code_call_flag_truncated",
+        );
+        let is_deploy_code_call_flag = context.builder().build_int_compare(
+            inkwell::IntPredicate::EQ,
+            is_deploy_call_flag_truncated,
+            context.field_const(1),
+            "is_deploy_code_call_flag",
+        );
         context.build_conditional_branch(
-            is_deploy_code_call,
+            is_deploy_code_call_flag,
             deploy_code_call_block,
             runtime_code_call_block,
         );

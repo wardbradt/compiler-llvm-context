@@ -21,7 +21,6 @@ pub enum Intrinsic {
     Precompile,
     /// The near call with ABI data.
     NearCall,
-
     /// The current contract's address.
     Address,
     /// The caller's address.
@@ -36,6 +35,12 @@ pub enum Intrinsic {
     GetU128,
     /// The abstract `u128` setter.
     SetU128,
+    /// The public data price setter.
+    SetPubdataPrice,
+    /// The transaction counter incrementor.
+    IncrementTxCounter,
+    /// The pointer pack.
+    PointerPack,
 
     /// The long return.
     Return,
@@ -58,7 +63,6 @@ impl Intrinsic {
             Intrinsic::ToL1 => "llvm.syncvm.tol1",
             Intrinsic::Precompile => "llvm.syncvm.precompile",
             Intrinsic::NearCall => "llvm.syncvm.nearcall",
-
             Intrinsic::Address => "llvm.syncvm.this",
             Intrinsic::Caller => "llvm.syncvm.caller",
             Intrinsic::CodeSource => "llvm.syncvm.codesource",
@@ -66,6 +70,9 @@ impl Intrinsic {
             Intrinsic::ErgsLeft => "llvm.syncvm.ergsleft",
             Intrinsic::GetU128 => "llvm.syncvm.getu128",
             Intrinsic::SetU128 => "llvm.syncvm.setu128",
+            Intrinsic::SetPubdataPrice => "llvm.syncvm.setpubdataprice",
+            Intrinsic::IncrementTxCounter => "llvm.syncvm.inctx",
+            Intrinsic::PointerPack => "llvm.syncvm.ptr.pack",
 
             Intrinsic::Return => "llvm.syncvm.return",
             Intrinsic::Revert => "llvm.syncvm.revert",

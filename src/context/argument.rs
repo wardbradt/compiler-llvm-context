@@ -11,6 +11,8 @@ pub struct Argument<'ctx> {
     pub value: inkwell::values::BasicValueEnum<'ctx>,
     /// The original AST value. Used mostly for string literals.
     pub original: Option<String>,
+    /// The preserved constant value, if available.
+    pub constant: Option<num::BigUint>,
 }
 
 impl<'ctx> Argument<'ctx> {
@@ -27,6 +29,7 @@ impl<'ctx> Argument<'ctx> {
         Self {
             value,
             original: None,
+            constant: None,
         }
     }
 
@@ -40,6 +43,21 @@ impl<'ctx> Argument<'ctx> {
         Self {
             value,
             original: Some(original),
+            constant: None,
+        }
+    }
+
+    ///
+    /// A shortcut constructor.
+    ///
+    pub fn new_with_constant(
+        value: inkwell::values::BasicValueEnum<'ctx>,
+        constant: num::BigUint,
+    ) -> Self {
+        Self {
+            value,
+            original: None,
+            constant: Some(constant),
         }
     }
 

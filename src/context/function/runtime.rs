@@ -37,6 +37,8 @@ pub struct Runtime<'ctx> {
     pub delegate_call: inkwell::values::FunctionValue<'ctx>,
     /// The `__mimiccall` runtime function.
     pub mimic_call: inkwell::values::FunctionValue<'ctx>,
+    /// The `__systemcall` runtime function.
+    pub system_call: inkwell::values::FunctionValue<'ctx>,
 }
 
 impl<'ctx> Runtime<'ctx> {
@@ -81,6 +83,9 @@ impl<'ctx> Runtime<'ctx> {
 
     /// The `__mimiccall` runtime function name.
     pub const FUNCTION_MIMICCALL: &'static str = "__mimiccall";
+
+    /// The `__systemcall` runtime function name.
+    pub const FUNCTION_SYSTEMCALL: &'static str = "__systemcall";
 
     ///
     /// A shortcut constructor.
@@ -274,6 +279,28 @@ impl<'ctx> Runtime<'ctx> {
             ),
             Some(inkwell::module::Linkage::External),
         );
+        let system_call = module.add_function(
+            Self::FUNCTION_SYSTEMCALL,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
 
         Self {
             personality,
@@ -291,6 +318,7 @@ impl<'ctx> Runtime<'ctx> {
             static_call,
             delegate_call,
             mimic_call,
+            system_call,
         }
     }
 

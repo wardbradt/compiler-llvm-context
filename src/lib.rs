@@ -50,14 +50,7 @@ pub use self::evm::return_data;
 pub use self::evm::storage;
 pub use self::evm::verbatim;
 pub use self::hashes::keccak256;
-pub use self::r#const::GLOBAL_CALLDATA_ABI;
-pub use self::r#const::GLOBAL_CALLDATA_SIZE;
-pub use self::r#const::GLOBAL_RETURN_DATA_ABI;
-pub use self::r#const::GLOBAL_RETURN_DATA_SIZE;
-pub use self::r#const::GLOBAL_TEMP_SIMULATOR_ADDRESS;
-pub use self::r#const::GLOBAL_TEMP_SIMULATOR_MSG_VALUE;
-pub use self::r#const::HEAP_AUX_OFFSET_CONSTRUCTOR_RETURN_DATA;
-pub use self::r#const::HEAP_AUX_OFFSET_EXTERNAL_CALL;
+pub use self::r#const::*;
 
 use std::sync::Arc;
 use std::sync::RwLock;

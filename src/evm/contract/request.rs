@@ -2,7 +2,6 @@
 //! Translates some custom external call requests.
 //!
 
-use inkwell::types::BasicType;
 use inkwell::values::BasicValue;
 
 use crate::context::address_space::AddressSpace;
@@ -35,6 +34,7 @@ where
         input_length,
         context.field_const(0),
         AddressSpace::HeapAuxiliary,
+        true,
     )?;
 
     let signature_hash = crate::hashes::keccak256(signature.as_bytes());
@@ -62,26 +62,12 @@ where
         context.build_store(arguments_pointer, argument);
     }
 
-    let result_type = context
-        .structure_type(vec![
-            context
-                .integer_type(compiler_common::BITLENGTH_BYTE)
-                .ptr_type(AddressSpace::Generic.into())
-                .as_basic_type_enum(),
-            context
-                .integer_type(compiler_common::BITLENGTH_BOOLEAN)
-                .as_basic_type_enum(),
-        ])
-        .as_basic_type_enum();
-    let result_pointer = context.build_alloca(result_type, "call_result_pointer");
-
     let result_pointer = context
-        .build_call(
+        .build_invoke_far_call(
             context.runtime.static_call,
-            &[
+            vec![
                 abi_data.as_basic_value_enum(),
                 address.as_basic_value_enum(),
-                result_pointer.as_basic_value_enum(),
             ],
             "call",
         )

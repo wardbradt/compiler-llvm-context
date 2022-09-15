@@ -6,6 +6,7 @@ pub mod request;
 pub mod simulation;
 
 use inkwell::values::BasicValue;
+use num::BigUint;
 
 use crate::context::address_space::AddressSpace;
 use crate::context::argument::Argument;
@@ -27,58 +28,117 @@ pub fn call<'ctx, D>(
     input_length: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
+    simulation: Option<BigUint>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
-    if let Some(address_simulation) = crate::evm::parse_llvm_constant(address) {
-        if crate::evm::parse_address(compiler_common::ADDRESS_TO_L1) == address_simulation {
+    if let Some(simulation) = simulation {
+        if crate::evm::parse_address(compiler_common::ADDRESS_TO_L1) == simulation {
             let is_first = gas;
             let in_0 = value.unwrap_or_else(|| context.field_const(0));
             let in_1 = input_offset;
             return simulation::to_l1(context, is_first, in_0, in_1).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_CODE_ADDRESS)
-            == address_simulation
-        {
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_CODE_ADDRESS) == simulation {
             return simulation::code_source(context).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_PRECOMPILE)
-            == address_simulation
-        {
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_PRECOMPILE) == simulation {
             let in_0 = gas;
             let ergs_left = input_offset;
 
             return simulation::precompile(context, in_0, ergs_left).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_META) == address_simulation {
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_META) == simulation {
             return simulation::meta(context).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_MIMIC_CALL)
-            == address_simulation
-        {
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_MIMIC_CALL) == simulation {
             let address = gas;
             let mimic = value.unwrap_or_else(|| context.field_const(0));
             let abi_data = input_offset;
 
             return simulation::mimic_call(context, address, mimic, abi_data).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_SYSTEM_CALL)
-            == address_simulation
-        {
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_RAW_FAR_CALL) == simulation {
             let address = gas;
             let abi_data = input_offset;
+
+            return simulation::raw_far_call(
+                context,
+                function,
+                address,
+                abi_data,
+                output_offset,
+                output_length,
+            )
+            .map(Some);
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_SYSTEM_CALL) == simulation {
+            let address = gas;
+            let abi_data = input_offset;
+            let extra_value_1 = value.unwrap_or_else(|| context.field_const(0));
+            let extra_value_2 = input_length;
 
             return simulation::system_call(
                 context,
                 address,
                 abi_data,
-                input_length,
                 output_offset,
                 output_length,
+                extra_value_1,
+                extra_value_2,
             )
             .map(Some);
         } else if crate::evm::parse_address(compiler_common::ADDRESS_SET_CONTEXT_VALUE_CALL)
-            == address_simulation
+            == simulation
         {
             let value = value.unwrap_or_else(|| context.field_const(0));
 
             return simulation::set_context_value(context, value).map(Some);
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_SET_PUBDATA_PRICE)
+            == simulation
+        {
+            let price = gas;
+
+            return simulation::set_pubdata_price(context, price).map(Some);
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_INCREMENT_TX_COUNTER)
+            == simulation
+        {
+            return simulation::increment_tx_counter(context).map(Some);
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_PTR_CALLDATA)
+            == simulation
+        {
+            return simulation::get_global(
+                context,
+                BigUint::from(crate::r#const::GLOBAL_INDEX_CALLDATA_ABI),
+            )
+            .map(Some);
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_CALL_FLAGS)
+            == simulation
+        {
+            return simulation::get_global(
+                context,
+                BigUint::from(crate::r#const::GLOBAL_INDEX_CALL_FLAGS),
+            )
+            .map(Some);
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_EXTRA_ABI_DATA_1)
+            == simulation
+        {
+            return simulation::get_global(
+                context,
+                BigUint::from(crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_1),
+            )
+            .map(Some);
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_EXTRA_ABI_DATA_2)
+            == simulation
+        {
+            return simulation::get_global(
+                context,
+                BigUint::from(crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_2),
+            )
+            .map(Some);
+        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_PTR_RETURN_DATA)
+            == simulation
+        {
+            return simulation::get_global(
+                context,
+                BigUint::from(crate::r#const::GLOBAL_INDEX_RETURN_DATA_ABI),
+            )
+            .map(Some);
         }
     }
 
@@ -128,7 +188,6 @@ where
             input_length,
             output_offset,
             output_length,
-            None,
         )
     }?;
     context.build_store(result_pointer, result);
@@ -171,6 +230,7 @@ pub fn abi_data<'ctx, D>(
     input_length: inkwell::values::IntValue<'ctx>,
     gas: inkwell::values::IntValue<'ctx>,
     address_space: AddressSpace,
+    is_system_call: bool,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -229,6 +289,21 @@ where
             "abi_data_add_heap_auxiliary_marker",
         );
     }
+    if is_system_call {
+        let auxiliary_heap_marker_shifted = context.builder().build_left_shift(
+            context.field_const(zkevm_opcode_defs::FarCallForwardPageType::UseAuxHeap as u64),
+            context.field_const(
+                ((compiler_common::BITLENGTH_X32 * 7) + (compiler_common::BITLENGTH_BYTE * 3))
+                    as u64,
+            ),
+            "abi_data_system_call_marker_shifted",
+        );
+        abi_data = context.builder().build_int_add(
+            abi_data,
+            auxiliary_heap_marker_shifted,
+            "abi_data_add_system_call_marker",
+        );
+    }
 
     Ok(abi_data.as_basic_value_enum())
 }
@@ -267,27 +342,23 @@ where
     context.build_conditional_branch(is_value_zero, value_zero_block, value_non_zero_block);
 
     context.set_basic_block(value_non_zero_block);
-    let extra_data_offset = context.builder().build_int_add(
-        input_offset,
-        input_length,
-        "contract_call_extra_data_offset",
-    );
-    crate::evm::save_and_write_extra_data(context, extra_data_offset, value, address)?;
-    let input_length_with_extra = context.builder().build_int_add(
-        input_length,
-        context.field_const((compiler_common::SIZE_FIELD * 2) as u64),
-        "contract_call_input_length_with_extra",
-    );
-    let result = call_default(
+    let abi_data = abi_data(
         context,
-        function,
-        gas,
-        context.field_const_str_hex(compiler_common::ADDRESS_MSG_VALUE),
         input_offset,
-        input_length_with_extra,
+        input_length,
+        gas,
+        AddressSpace::Heap,
+        true,
+    )?
+    .into_int_value();
+    let result = call_system(
+        context,
+        context.field_const_str_hex(compiler_common::ADDRESS_MSG_VALUE),
+        abi_data,
         output_offset,
         output_length,
-        Some(extra_data_offset),
+        value,
+        address,
     )?;
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(value_join_block);
@@ -302,7 +373,6 @@ where
         input_length,
         output_offset,
         output_length,
-        None,
     )?;
     context.build_store(result_pointer, result);
     context.build_unconditional_branch(value_join_block);
@@ -325,7 +395,6 @@ fn call_default<'ctx, D>(
     input_length: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
-    restore_extra_data_offset: Option<inkwell::values::IntValue<'ctx>>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -338,8 +407,15 @@ where
     );
     context.build_store(status_code_result_pointer, context.field_const(0));
 
-    let abi_data =
-        abi_data(context, input_offset, input_length, gas, AddressSpace::Heap)?.into_int_value();
+    let abi_data = abi_data(
+        context,
+        input_offset,
+        input_length,
+        gas,
+        AddressSpace::Heap,
+        false,
+    )?
+    .into_int_value();
 
     let result_pointer = context
         .build_invoke_far_call(
@@ -405,9 +481,6 @@ where
         "contract_call_destination",
     );
 
-    if let Some(restore_extra_data_offset) = restore_extra_data_offset {
-        crate::evm::restore_extra_data(context, restore_extra_data_offset)?;
-    }
     context.build_memcpy(
         IntrinsicFunction::MemoryCopyFromGeneric,
         destination,
@@ -538,9 +611,10 @@ where
 }
 
 ///
-/// Generates a system call.
+/// Generates a raw far call.
 ///
-fn call_system<'ctx, D>(
+#[allow(clippy::too_many_arguments)]
+fn call_far_raw<'ctx, D>(
     context: &mut Context<'ctx, D>,
     function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
@@ -565,6 +639,113 @@ where
             vec![
                 abi_data.as_basic_value_enum(),
                 address.as_basic_value_enum(),
+            ],
+            "system_far_call_external",
+        )
+        .expect("IntrinsicFunction always returns a flag");
+
+    let result_abi_data_pointer = unsafe {
+        context.builder().build_gep(
+            far_call_result_pointer.into_pointer_value(),
+            &[
+                context.field_const(0),
+                context
+                    .integer_type(compiler_common::BITLENGTH_X32)
+                    .const_zero(),
+            ],
+            "system_far_call_external_result_abi_data_pointer",
+        )
+    };
+    let result_abi_data = context.build_load(
+        result_abi_data_pointer,
+        "system_far_call_external_result_abi_data",
+    );
+    let result_abi_data_casted = context.builder().build_pointer_cast(
+        result_abi_data.into_pointer_value(),
+        context.field_type().ptr_type(AddressSpace::Generic.into()),
+        "system_far_call_external_result_abi_data_casted",
+    );
+
+    let result_status_code_pointer = unsafe {
+        context.builder().build_gep(
+            far_call_result_pointer.into_pointer_value(),
+            &[
+                context.field_const(0),
+                context
+                    .integer_type(compiler_common::BITLENGTH_X32)
+                    .const_int(1, false),
+            ],
+            "system_far_call_external_result_status_code_pointer",
+        )
+    };
+    let result_status_code_boolean = context.build_load(
+        result_status_code_pointer,
+        "system_far_call_external_result_status_code_boolean",
+    );
+    let result_status_code = context.builder().build_int_z_extend_or_bit_cast(
+        result_status_code_boolean.into_int_value(),
+        context.field_type(),
+        "system_far_call_external_result_status_code",
+    );
+    context.build_store(status_code_result_pointer, result_status_code);
+
+    let source = result_abi_data_casted;
+
+    let destination = context.access_memory(
+        output_offset,
+        AddressSpace::Heap,
+        "system_far_call_destination",
+    );
+
+    context.build_memcpy(
+        IntrinsicFunction::MemoryCopyFromGeneric,
+        destination,
+        source,
+        output_length,
+        "system_far_call_memcpy_from_child",
+    );
+
+    context.write_abi_return_data(result_abi_data.into_pointer_value());
+    context.build_unconditional_branch(join_block);
+
+    context.set_basic_block(join_block);
+    let status_code_result =
+        context.build_load(status_code_result_pointer, "system_call_status_code");
+    Ok(status_code_result)
+}
+
+///
+/// Generates a system call.
+///
+#[allow(clippy::too_many_arguments)]
+fn call_system<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    address: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::IntValue<'ctx>,
+    output_offset: inkwell::values::IntValue<'ctx>,
+    output_length: inkwell::values::IntValue<'ctx>,
+    extra_value_1: inkwell::values::IntValue<'ctx>,
+    extra_value_2: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let join_block = context.append_basic_block("system_far_call_join_block");
+
+    let status_code_result_pointer = context.build_alloca(
+        context.field_type(),
+        "system_far_call_result_status_code_pointer",
+    );
+    context.build_store(status_code_result_pointer, context.field_const(0));
+
+    let far_call_result_pointer = context
+        .build_invoke_far_call(
+            context.runtime.system_call,
+            vec![
+                abi_data.as_basic_value_enum(),
+                address.as_basic_value_enum(),
+                extra_value_1.as_basic_value_enum(),
+                extra_value_2.as_basic_value_enum(),
             ],
             "system_far_call_external",
         )
