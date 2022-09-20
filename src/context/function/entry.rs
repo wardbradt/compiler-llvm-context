@@ -118,14 +118,15 @@ where
             .into_pointer_value();
         context.write_abi_calldata(calldata_abi);
         let calldata_length = context.get_global(crate::r#const::GLOBAL_CALLDATA_SIZE)?;
-        let return_data_abi = unsafe {
+        let calldata_end_pointer = unsafe {
             context.builder().build_gep(
                 calldata_abi,
                 &[calldata_length.into_int_value()],
                 "return_data_abi_initializer",
             )
         };
-        context.write_abi_return_data(return_data_abi);
+        context.write_abi_return_data(calldata_end_pointer);
+        context.set_global(crate::r#const::GLOBAL_ACTIVE_POINTER, calldata_end_pointer);
 
         let call_flags = context
             .function()

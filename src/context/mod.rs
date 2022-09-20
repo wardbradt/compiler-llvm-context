@@ -1016,7 +1016,7 @@ where
     /// Writes the calldata ABI data to the specified global variables.
     ///
     pub fn write_abi_calldata(&self, pointer: inkwell::values::PointerValue<'ctx>) {
-        self.set_global(crate::r#const::GLOBAL_CALLDATA_ABI, pointer);
+        self.set_global(crate::r#const::GLOBAL_CALLDATA_POINTER, pointer);
 
         let abi_pointer_value =
             self.builder()
@@ -1039,7 +1039,7 @@ where
     /// Writes the return data ABI data to the specified global variables.
     ///
     pub fn write_abi_return_data(&self, pointer: inkwell::values::PointerValue<'ctx>) {
-        self.set_global(crate::r#const::GLOBAL_RETURN_DATA_ABI, pointer);
+        self.set_global(crate::r#const::GLOBAL_RETURN_DATA_POINTER, pointer);
 
         let abi_pointer_value =
             self.builder()
@@ -1088,7 +1088,10 @@ where
                 "deployer_revert_data_pointer_shifted",
             )
         };
-        self.set_global(crate::r#const::GLOBAL_RETURN_DATA_ABI, revert_data_pointer);
+        self.set_global(
+            crate::r#const::GLOBAL_RETURN_DATA_POINTER,
+            revert_data_pointer,
+        );
         self.set_global(crate::r#const::GLOBAL_RETURN_DATA_SIZE, revert_data_length);
     }
 

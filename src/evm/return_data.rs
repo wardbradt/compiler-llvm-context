@@ -42,7 +42,7 @@ where
     );
 
     let return_data_pointer = context
-        .get_global(crate::r#const::GLOBAL_RETURN_DATA_ABI)?
+        .get_global(crate::r#const::GLOBAL_RETURN_DATA_POINTER)?
         .into_pointer_value();
     let return_data_pointer = unsafe {
         context.builder().build_gep(

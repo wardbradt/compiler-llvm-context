@@ -52,7 +52,7 @@ where
                 .into_int_value();
             crate::evm::contract::request::request(
                 context,
-                context.field_const_str(compiler_common::ADDRESS_IMMUTABLE_SIMULATOR),
+                context.field_const(compiler_common::ADDRESS_IMMUTABLE_SIMULATOR.into()),
                 "getImmutable(address,uint256)",
                 vec![code_address, index],
             )

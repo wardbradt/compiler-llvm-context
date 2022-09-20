@@ -16,7 +16,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "blockErgsLimit()",
         vec![],
     )
@@ -34,7 +34,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "ergsPrice()",
         vec![],
     )
@@ -52,7 +52,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "origin()",
         vec![],
     )
@@ -70,7 +70,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "chainId()",
         vec![],
     )
@@ -88,7 +88,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "getBlockNumber()",
         vec![],
     )
@@ -106,7 +106,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "getBlockTimestamp()",
         vec![],
     )
@@ -125,7 +125,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "blockHash(uint256)",
         vec![index],
     )
@@ -143,7 +143,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "difficulty()",
         vec![],
     )
@@ -161,7 +161,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "coinbase()",
         vec![],
     )
@@ -179,7 +179,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "baseFee()",
         vec![],
     )
@@ -197,7 +197,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_SYSTEM_CONTEXT),
+        context.field_const(compiler_common::ADDRESS_SYSTEM_CONTEXT.into()),
         "msize()",
         vec![],
     )

@@ -50,7 +50,7 @@ where
 {
     crate::evm::contract::request::request(
         context,
-        context.field_const_str(compiler_common::ADDRESS_ETH_TOKEN),
+        context.field_const(compiler_common::ADDRESS_ETH_TOKEN.into()),
         "balanceOf(address)",
         vec![address],
     )

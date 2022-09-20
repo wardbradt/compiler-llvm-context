@@ -17,28 +17,53 @@ pub struct Runtime<'ctx> {
     /// The exception throwing function.
     pub cxa_throw: inkwell::values::FunctionValue<'ctx>,
 
-    /// The `__addmod` runtime function.
+    /// The corresponding runtime function.
     pub add_mod: inkwell::values::FunctionValue<'ctx>,
-    /// The `__mulmod` runtime function.
+    /// The corresponding runtime function.
     pub mul_mod: inkwell::values::FunctionValue<'ctx>,
-    /// The `__signextend` runtime function.
+    /// The corresponding runtime function.
     pub sign_extend: inkwell::values::FunctionValue<'ctx>,
 
-    /// The `__sload` runtime function.
+    /// The corresponding runtime function.
     pub storage_load: inkwell::values::FunctionValue<'ctx>,
-    /// The `__sstore` runtime function.
+    /// The corresponding runtime function.
     pub storage_store: inkwell::values::FunctionValue<'ctx>,
 
-    /// The `__farcall` runtime function.
+    /// The corresponding runtime function.
     pub far_call: inkwell::values::FunctionValue<'ctx>,
-    /// The `__staticcall` runtime function.
+    /// The corresponding runtime function.
+    pub far_call_byref: inkwell::values::FunctionValue<'ctx>,
+    /// The corresponding runtime function.
+    pub system_far_call: inkwell::values::FunctionValue<'ctx>,
+    /// The corresponding runtime function.
+    pub system_far_call_byref: inkwell::values::FunctionValue<'ctx>,
+
+    /// The corresponding runtime function.
     pub static_call: inkwell::values::FunctionValue<'ctx>,
-    /// The `__delegatecall` runtime function.
+    /// The corresponding runtime function.
+    pub static_call_byref: inkwell::values::FunctionValue<'ctx>,
+    /// The corresponding runtime function.
+    pub system_static_call: inkwell::values::FunctionValue<'ctx>,
+    /// The corresponding runtime function.
+    pub system_static_call_byref: inkwell::values::FunctionValue<'ctx>,
+
+    /// The corresponding runtime function.
     pub delegate_call: inkwell::values::FunctionValue<'ctx>,
-    /// The `__mimiccall` runtime function.
+    /// The corresponding runtime function.
+    pub delegate_call_byref: inkwell::values::FunctionValue<'ctx>,
+    /// The corresponding runtime function.
+    pub system_delegate_call: inkwell::values::FunctionValue<'ctx>,
+    /// The corresponding runtime function.
+    pub system_delegate_call_byref: inkwell::values::FunctionValue<'ctx>,
+
+    /// The corresponding runtime function.
     pub mimic_call: inkwell::values::FunctionValue<'ctx>,
-    /// The `__systemcall` runtime function.
-    pub system_call: inkwell::values::FunctionValue<'ctx>,
+    /// The corresponding runtime function.
+    pub mimic_call_byref: inkwell::values::FunctionValue<'ctx>,
+    /// The corresponding runtime function.
+    pub system_mimic_call: inkwell::values::FunctionValue<'ctx>,
+    /// The corresponding runtime function.
+    pub system_mimic_call_byref: inkwell::values::FunctionValue<'ctx>,
 }
 
 impl<'ctx> Runtime<'ctx> {
@@ -57,35 +82,68 @@ impl<'ctx> Runtime<'ctx> {
     /// The LLVM exception throwing function name.
     pub const FUNCTION_CXA_THROW: &'static str = "__cxa_throw";
 
-    /// The `__addmod` runtime function name.
+    /// The corresponding runtime function name.
     pub const FUNCTION_ADDMOD: &'static str = "__addmod";
 
-    /// The `__mulmod` runtime function name.
+    /// The corresponding runtime function name.
     pub const FUNCTION_MULMOD: &'static str = "__mulmod";
 
-    /// The `__signextend` runtime function name.
+    /// The corresponding runtime function name.
     pub const FUNCTION_SIGNEXTEND: &'static str = "__signextend";
 
-    /// The `__sload` runtime function name.
+    /// The corresponding runtime function name.
     pub const FUNCTION_SLOAD: &'static str = "__sload";
 
-    /// The `__sstore` runtime function name.
+    /// The corresponding runtime function name.
     pub const FUNCTION_SSTORE: &'static str = "__sstore";
 
-    /// The `__farcall` runtime function name.
+    /// The corresponding runtime function name.
     pub const FUNCTION_FARCALL: &'static str = "__farcall";
 
-    /// The `__staticcall` runtime function name.
+    /// The corresponding runtime function name.
+    pub const FUNCTION_FARCALL_BYREF: &'static str = "__farcall_byref";
+
+    /// The corresponding runtime function name.
+    pub const FUNCTION_SYSTEM_FARCALL: &'static str = "__system_call";
+
+    /// The corresponding runtime function name.
+    pub const FUNCTION_SYSTEM_FARCALL_BYREF: &'static str = "__system_call_byref";
+
+    /// The corresponding runtime function name.
     pub const FUNCTION_STATICCALL: &'static str = "__staticcall";
 
-    /// The `__delegatecall` runtime function name.
+    /// The corresponding runtime function name.
+    pub const FUNCTION_STATICCALL_BYREF: &'static str = "__staticcall_byref";
+
+    /// The corresponding runtime function name.
+    pub const FUNCTION_SYSTEM_STATICCALL: &'static str = "__system_staticcall";
+
+    /// The corresponding runtime function name.
+    pub const FUNCTION_SYSTEM_STATICCALL_BYREF: &'static str = "__system_staticcall_byref";
+
+    /// The corresponding runtime function name.
     pub const FUNCTION_DELEGATECALL: &'static str = "__delegatecall";
 
-    /// The `__mimiccall` runtime function name.
+    /// The corresponding runtime function name.
+    pub const FUNCTION_DELEGATECALL_BYREF: &'static str = "__delegatecall_byref";
+
+    /// The corresponding runtime function name.
+    pub const FUNCTION_SYSTEM_DELEGATECALL: &'static str = "__system_delegatecall";
+
+    /// The corresponding runtime function name.
+    pub const FUNCTION_SYSTEM_DELEGATECALL_BYREF: &'static str = "__system_delegatecall_byref";
+
+    /// The corresponding runtime function name.
     pub const FUNCTION_MIMICCALL: &'static str = "__mimiccall";
 
-    /// The `__systemcall` runtime function name.
-    pub const FUNCTION_SYSTEMCALL: &'static str = "__systemcall";
+    /// The corresponding runtime function name.
+    pub const FUNCTION_MIMICCALL_BYREF: &'static str = "__mimiccall_byref";
+
+    /// The corresponding runtime function name.
+    pub const FUNCTION_SYSTEM_MIMICCALL: &'static str = "__system_mimiccall";
+
+    /// The corresponding runtime function name.
+    pub const FUNCTION_SYSTEM_MIMICCALL_BYREF: &'static str = "__system_mimiccall_byref";
 
     ///
     /// A shortcut constructor.
@@ -212,6 +270,7 @@ impl<'ctx> Runtime<'ctx> {
             )
             .ptr_type(AddressSpace::Stack.into())
             .as_basic_type_enum();
+
         let far_call = module.add_function(
             Self::FUNCTION_FARCALL,
             external_call_result_type.fn_type(
@@ -228,6 +287,69 @@ impl<'ctx> Runtime<'ctx> {
             ),
             Some(inkwell::module::Linkage::External),
         );
+        let far_call_byref = module.add_function(
+            Self::FUNCTION_FARCALL_BYREF,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_BYTE as u32)
+                        .ptr_type(AddressSpace::Generic.into())
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+        let system_far_call = module.add_function(
+            Self::FUNCTION_SYSTEM_FARCALL,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+        let system_far_call_byref = module.add_function(
+            Self::FUNCTION_SYSTEM_FARCALL_BYREF,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_BYTE as u32)
+                        .ptr_type(AddressSpace::Generic.into())
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+
         let static_call = module.add_function(
             Self::FUNCTION_STATICCALL,
             external_call_result_type.fn_type(
@@ -244,6 +366,69 @@ impl<'ctx> Runtime<'ctx> {
             ),
             Some(inkwell::module::Linkage::External),
         );
+        let static_call_byref = module.add_function(
+            Self::FUNCTION_STATICCALL_BYREF,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_BYTE as u32)
+                        .ptr_type(AddressSpace::Generic.into())
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+        let system_static_call = module.add_function(
+            Self::FUNCTION_SYSTEM_STATICCALL,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+        let system_static_call_byref = module.add_function(
+            Self::FUNCTION_SYSTEM_STATICCALL_BYREF,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_BYTE as u32)
+                        .ptr_type(AddressSpace::Generic.into())
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+
         let delegate_call = module.add_function(
             Self::FUNCTION_DELEGATECALL,
             external_call_result_type.fn_type(
@@ -260,6 +445,69 @@ impl<'ctx> Runtime<'ctx> {
             ),
             Some(inkwell::module::Linkage::External),
         );
+        let delegate_call_byref = module.add_function(
+            Self::FUNCTION_DELEGATECALL_BYREF,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_BYTE as u32)
+                        .ptr_type(AddressSpace::Generic.into())
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+        let system_delegate_call = module.add_function(
+            Self::FUNCTION_SYSTEM_DELEGATECALL,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+        let system_delegate_call_byref = module.add_function(
+            Self::FUNCTION_SYSTEM_DELEGATECALL_BYREF,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_BYTE as u32)
+                        .ptr_type(AddressSpace::Generic.into())
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+
         let mimic_call = module.add_function(
             Self::FUNCTION_MIMICCALL,
             external_call_result_type.fn_type(
@@ -279,10 +527,59 @@ impl<'ctx> Runtime<'ctx> {
             ),
             Some(inkwell::module::Linkage::External),
         );
-        let system_call = module.add_function(
-            Self::FUNCTION_SYSTEMCALL,
+        let mimic_call_byref = module.add_function(
+            Self::FUNCTION_MIMICCALL_BYREF,
             external_call_result_type.fn_type(
                 &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_BYTE as u32)
+                        .ptr_type(AddressSpace::Generic.into())
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+        let system_mimic_call = module.add_function(
+            Self::FUNCTION_SYSTEM_MIMICCALL,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
+                        .as_basic_type_enum()
+                        .into(),
+                    external_call_result_type.into(),
+                ],
+                false,
+            ),
+            Some(inkwell::module::Linkage::External),
+        );
+        let system_mimic_call_byref = module.add_function(
+            Self::FUNCTION_SYSTEM_MIMICCALL_BYREF,
+            external_call_result_type.fn_type(
+                &[
+                    llvm.custom_width_int_type(compiler_common::BITLENGTH_BYTE as u32)
+                        .ptr_type(AddressSpace::Generic.into())
+                        .as_basic_type_enum()
+                        .into(),
                     llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
                         .as_basic_type_enum()
                         .into(),
@@ -315,11 +612,72 @@ impl<'ctx> Runtime<'ctx> {
             storage_store,
 
             far_call,
+            far_call_byref,
+            system_far_call,
+            system_far_call_byref,
+
             static_call,
+            static_call_byref,
+            system_static_call,
+            system_static_call_byref,
+
             delegate_call,
+            delegate_call_byref,
+            system_delegate_call,
+            system_delegate_call_byref,
+
             mimic_call,
-            system_call,
+            mimic_call_byref,
+            system_mimic_call,
+            system_mimic_call_byref,
         }
+    }
+
+    ///
+    /// Modifies the external call function with `with_ptr` and `system` modifiers.
+    ///
+    pub fn modify(
+        &self,
+        function: inkwell::values::FunctionValue<'ctx>,
+        is_byref: bool,
+        is_system: bool,
+    ) -> anyhow::Result<inkwell::values::FunctionValue<'ctx>> {
+        let modified = if function == self.far_call {
+            match (is_byref, is_system) {
+                (false, false) => self.far_call,
+                (false, true) => self.system_far_call,
+                (true, false) => self.far_call,
+                (true, true) => self.system_far_call_byref,
+            }
+        } else if function == self.static_call {
+            match (is_byref, is_system) {
+                (false, false) => self.static_call,
+                (false, true) => self.system_static_call,
+                (true, false) => self.static_call,
+                (true, true) => self.system_static_call_byref,
+            }
+        } else if function == self.delegate_call {
+            match (is_byref, is_system) {
+                (false, false) => self.delegate_call,
+                (false, true) => self.system_delegate_call,
+                (true, false) => self.delegate_call,
+                (true, true) => self.system_delegate_call_byref,
+            }
+        } else if function == self.mimic_call {
+            match (is_byref, is_system) {
+                (false, false) => self.mimic_call,
+                (false, true) => self.system_mimic_call,
+                (true, false) => self.mimic_call,
+                (true, true) => self.system_mimic_call_byref,
+            }
+        } else {
+            anyhow::bail!(
+                "Cannot modify an external call function `{}`",
+                function.get_name().to_string_lossy()
+            );
+        };
+
+        Ok(modified)
     }
 
     ///

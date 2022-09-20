@@ -2,14 +2,14 @@
 //! The LLVM context constants.
 //!
 
-/// The calldata ABI pointer global variable name.
-pub static GLOBAL_CALLDATA_ABI: &str = "ptr_calldata";
+/// The calldata pointer global variable name.
+pub static GLOBAL_CALLDATA_POINTER: &str = "ptr_calldata";
 
 /// The calldata size pointer global variable name.
 pub static GLOBAL_CALLDATA_SIZE: &str = "calldatasize";
 
-/// The return data ABI pointer global variable name.
-pub static GLOBAL_RETURN_DATA_ABI: &str = "ptr_return_data";
+/// The return data pointer global variable name.
+pub static GLOBAL_RETURN_DATA_POINTER: &str = "ptr_return_data";
 
 /// The return data size pointer global variable name.
 pub static GLOBAL_RETURN_DATA_SIZE: &str = "returndatasize";
@@ -19,6 +19,9 @@ pub static GLOBAL_CALL_FLAGS: &str = "call_flags";
 
 /// The extra ABI data global variable name.
 pub static GLOBAL_EXTRA_ABI_DATA: &str = "extra_abi_data";
+
+/// The active pointer global variable name.
+pub static GLOBAL_ACTIVE_POINTER: &str = "ptr_active";
 
 /// The external call data offset in the auxiliary heap.
 pub const HEAP_AUX_OFFSET_EXTERNAL_CALL: u64 = 0;

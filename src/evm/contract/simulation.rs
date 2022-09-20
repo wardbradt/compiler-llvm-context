@@ -3,8 +3,6 @@
 //!
 
 use inkwell::values::BasicValue;
-use num::BigUint;
-use num::ToPrimitive;
 
 use crate::context::function::intrinsic::Intrinsic as IntrinsicFunction;
 use crate::context::Context;
@@ -139,20 +137,16 @@ where
 ///
 pub fn mimic_call<'ctx, D>(
     context: &mut Context<'ctx, D>,
+    function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
     mimic: inkwell::values::IntValue<'ctx>,
-    abi_data: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::BasicValueEnum<'ctx>,
+    extra_abi_data: [inkwell::values::IntValue<'ctx>; crate::r#const::EXTRA_ABI_DATA_SIZE],
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
 {
-    super::call_mimic(
-        context,
-        context.runtime.mimic_call,
-        address,
-        mimic,
-        abi_data,
-    )
+    super::call_mimic(context, function, address, mimic, abi_data, extra_abi_data)
 }
 
 ///
@@ -162,7 +156,7 @@ pub fn raw_far_call<'ctx, D>(
     context: &mut Context<'ctx, D>,
     function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
-    abi_data: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::BasicValueEnum<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
@@ -185,8 +179,9 @@ where
 #[allow(clippy::too_many_arguments)]
 pub fn system_call<'ctx, D>(
     context: &mut Context<'ctx, D>,
+    function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
-    abi_data: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::BasicValueEnum<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
     extra_value_1: inkwell::values::IntValue<'ctx>,
@@ -197,6 +192,7 @@ where
 {
     super::call_system(
         context,
+        function,
         address,
         abi_data,
         output_offset,
@@ -264,14 +260,14 @@ where
 ///
 pub fn get_global<'ctx, D>(
     context: &mut Context<'ctx, D>,
-    index: BigUint,
+    index: usize,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
 {
-    match index.to_usize() {
-        Some(crate::r#const::GLOBAL_INDEX_CALLDATA_ABI) => {
-            let pointer = context.get_global(crate::r#const::GLOBAL_CALLDATA_ABI)?;
+    match index {
+        crate::r#const::GLOBAL_INDEX_CALLDATA_ABI => {
+            let pointer = context.get_global(crate::r#const::GLOBAL_CALLDATA_POINTER)?;
             let value = context.builder().build_ptr_to_int(
                 pointer.into_pointer_value(),
                 context.field_type(),
@@ -279,13 +275,12 @@ where
             );
             Ok(value.as_basic_value_enum())
         }
-        Some(crate::r#const::GLOBAL_INDEX_CALL_FLAGS) => {
+        crate::r#const::GLOBAL_INDEX_CALL_FLAGS => {
             context.get_global(crate::r#const::GLOBAL_CALL_FLAGS)
         }
-        Some(
-            index @ crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_1
-            | index @ crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_2,
-        ) => {
+
+        index @ crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_1
+        | index @ crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_2 => {
             let extra_abi_data_pointer =
                 context.get_global_ptr(crate::r#const::GLOBAL_EXTRA_ABI_DATA)?;
             let extra_abi_data_index =
@@ -303,8 +298,8 @@ where
             );
             Ok(extra_abi_data_element)
         }
-        Some(crate::r#const::GLOBAL_INDEX_RETURN_DATA_ABI) => {
-            let pointer = context.get_global(crate::r#const::GLOBAL_RETURN_DATA_ABI)?;
+        crate::r#const::GLOBAL_INDEX_RETURN_DATA_ABI => {
+            let pointer = context.get_global(crate::r#const::GLOBAL_RETURN_DATA_POINTER)?;
             let value = context.builder().build_ptr_to_int(
                 pointer.into_pointer_value(),
                 context.field_type(),
@@ -317,4 +312,92 @@ where
             index
         ),
     }
+}
+
+///
+/// Loads the calldata pointer to the active pointer.
+///
+pub fn calldata_ptr_to_active<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let calldata_pointer = context.get_global(crate::r#const::GLOBAL_CALLDATA_POINTER)?;
+    context.set_global(crate::r#const::GLOBAL_ACTIVE_POINTER, calldata_pointer);
+    Ok(context.field_const(1).as_basic_value_enum())
+}
+
+///
+/// Loads the return data pointer to the active pointer.
+///
+pub fn return_data_ptr_to_active<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let calldata_pointer = context.get_global(crate::r#const::GLOBAL_RETURN_DATA_POINTER)?;
+    context.set_global(crate::r#const::GLOBAL_ACTIVE_POINTER, calldata_pointer);
+    Ok(context.field_const(1).as_basic_value_enum())
+}
+
+///
+/// Shifts the active pointer by the specified `offset`.
+///
+pub fn active_ptr_add_assign<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    offset: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let active_pointer = context.get_global(crate::r#const::GLOBAL_ACTIVE_POINTER)?;
+    let active_pointer_shifted = unsafe {
+        context.builder().build_gep(
+            active_pointer.into_pointer_value(),
+            &[offset],
+            "active_pointer_shifted",
+        )
+    };
+    context.set_global(
+        crate::r#const::GLOBAL_ACTIVE_POINTER,
+        active_pointer_shifted,
+    );
+    Ok(context.field_const(1).as_basic_value_enum())
+}
+
+///
+/// Shrinks the active pointer by the specified `offset`.
+///
+pub fn active_ptr_shrink_assign<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    offset: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    todo!();
+}
+
+///
+/// Writes the specified `data` into the upper 128 bits of the active pointer.
+///
+pub fn active_ptr_pack_assign<'ctx, D>(
+    context: &mut Context<'ctx, D>,
+    data: inkwell::values::IntValue<'ctx>,
+) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
+where
+    D: Dependency,
+{
+    let active_pointer = context.get_global(crate::r#const::GLOBAL_ACTIVE_POINTER)?;
+    let active_pointer_packed = context
+        .build_call(
+            context.get_intrinsic_function(IntrinsicFunction::PointerPack),
+            &[active_pointer, data.as_basic_value_enum()],
+            "active_pointer_packed",
+        )
+        .expect("Always returns a pointer");
+    context.set_global(crate::r#const::GLOBAL_ACTIVE_POINTER, active_pointer_packed);
+    Ok(context.field_const(1).as_basic_value_enum())
 }

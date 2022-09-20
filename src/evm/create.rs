@@ -256,7 +256,7 @@ where
             vec![
                 abi_data.as_basic_value_enum(),
                 context
-                    .field_const_str(compiler_common::ADDRESS_CONTRACT_DEPLOYER)
+                    .field_const(compiler_common::ADDRESS_CONTRACT_DEPLOYER.into())
                     .as_basic_value_enum(),
             ],
             "deployer_call_ordinary",
@@ -281,15 +281,15 @@ where
     );
     let deployer_call_result_pointer = context
         .build_invoke_far_call(
-            context.runtime.system_call,
+            context.runtime.system_far_call,
             vec![
                 abi_data.as_basic_value_enum(),
                 context
-                    .field_const_str(compiler_common::ADDRESS_MSG_VALUE)
+                    .field_const(compiler_common::ADDRESS_MSG_VALUE.into())
                     .as_basic_value_enum(),
                 value_and_system_call_bit.as_basic_value_enum(),
                 context
-                    .field_const_str(compiler_common::ADDRESS_CONTRACT_DEPLOYER)
+                    .field_const(compiler_common::ADDRESS_CONTRACT_DEPLOYER.into())
                     .as_basic_value_enum(),
             ],
             "deployer_call_system",

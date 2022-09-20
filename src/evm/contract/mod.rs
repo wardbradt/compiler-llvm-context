@@ -6,7 +6,6 @@ pub mod request;
 pub mod simulation;
 
 use inkwell::values::BasicValue;
-use num::BigUint;
 
 use crate::context::address_space::AddressSpace;
 use crate::context::argument::Argument;
@@ -28,46 +27,123 @@ pub fn call<'ctx, D>(
     input_length: inkwell::values::IntValue<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
-    simulation: Option<BigUint>,
+    simulation_address: Option<u16>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>
 where
     D: Dependency,
 {
-    if let Some(simulation) = simulation {
-        if crate::evm::parse_address(compiler_common::ADDRESS_TO_L1) == simulation {
+    match simulation_address {
+        Some(compiler_common::ADDRESS_TO_L1) => {
             let is_first = gas;
             let in_0 = value.unwrap_or_else(|| context.field_const(0));
             let in_1 = input_offset;
             return simulation::to_l1(context, is_first, in_0, in_1).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_CODE_ADDRESS) == simulation {
+        }
+        Some(compiler_common::ADDRESS_CODE_ADDRESS) => {
             return simulation::code_source(context).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_PRECOMPILE) == simulation {
+        }
+        Some(compiler_common::ADDRESS_PRECOMPILE) => {
             let in_0 = gas;
             let ergs_left = input_offset;
 
             return simulation::precompile(context, in_0, ergs_left).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_META) == simulation {
+        }
+        Some(compiler_common::ADDRESS_META) => {
             return simulation::meta(context).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_MIMIC_CALL) == simulation {
+        }
+        Some(compiler_common::ADDRESS_MIMIC_CALL) => {
             let address = gas;
             let mimic = value.unwrap_or_else(|| context.field_const(0));
             let abi_data = input_offset;
 
-            return simulation::mimic_call(context, address, mimic, abi_data).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_RAW_FAR_CALL) == simulation {
+            return simulation::mimic_call(
+                context,
+                context.runtime.system_mimic_call,
+                address,
+                mimic,
+                abi_data.as_basic_value_enum(),
+                [context.field_const(0), context.field_const(0)],
+            )
+            .map(Some);
+        }
+        Some(compiler_common::ADDRESS_SYSTEM_MIMIC_CALL) => {
+            let address = gas;
+            let mimic = value.unwrap_or_else(|| context.field_const(0));
+            let abi_data = input_offset;
+            let extra_value_1 = input_length;
+            let extra_value_2 = output_offset;
+
+            return simulation::mimic_call(
+                context,
+                context.runtime.system_mimic_call,
+                address,
+                mimic,
+                abi_data.as_basic_value_enum(),
+                [extra_value_1, extra_value_2],
+            )
+            .map(Some);
+        }
+        Some(compiler_common::ADDRESS_MIMIC_CALL_BYREF) => {
+            let address = gas;
+            let mimic = value.unwrap_or_else(|| context.field_const(0));
+            let abi_data = context.get_global(crate::r#const::GLOBAL_ACTIVE_POINTER)?;
+
+            return simulation::mimic_call(
+                context,
+                context.runtime.system_mimic_call_byref,
+                address,
+                mimic,
+                abi_data.as_basic_value_enum(),
+                [context.field_const(0), context.field_const(0)],
+            )
+            .map(Some);
+        }
+        Some(compiler_common::ADDRESS_SYSTEM_MIMIC_CALL_BYREF) => {
+            let address = gas;
+            let mimic = value.unwrap_or_else(|| context.field_const(0));
+            let abi_data = context.get_global(crate::r#const::GLOBAL_ACTIVE_POINTER)?;
+            let extra_value_1 = input_offset;
+            let extra_value_2 = input_length;
+
+            return simulation::mimic_call(
+                context,
+                context.runtime.system_mimic_call_byref,
+                address,
+                mimic,
+                abi_data,
+                [extra_value_1, extra_value_2],
+            )
+            .map(Some);
+        }
+        Some(compiler_common::ADDRESS_RAW_FAR_CALL) => {
             let address = gas;
             let abi_data = input_offset;
 
             return simulation::raw_far_call(
                 context,
-                function,
+                context.runtime.modify(function, false, false)?,
+                address,
+                abi_data.as_basic_value_enum(),
+                output_offset,
+                output_length,
+            )
+            .map(Some);
+        }
+        Some(compiler_common::ADDRESS_RAW_FAR_CALL_BYREF) => {
+            let address = gas;
+            let abi_data = context.get_global(crate::r#const::GLOBAL_ACTIVE_POINTER)?;
+
+            return simulation::raw_far_call(
+                context,
+                context.runtime.modify(function, true, false)?,
                 address,
                 abi_data,
                 output_offset,
                 output_length,
             )
             .map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_SYSTEM_CALL) == simulation {
+        }
+        Some(compiler_common::ADDRESS_SYSTEM_CALL) => {
             let address = gas;
             let abi_data = input_offset;
             let extra_value_1 = value.unwrap_or_else(|| context.field_const(0));
@@ -75,6 +151,25 @@ where
 
             return simulation::system_call(
                 context,
+                context.runtime.modify(function, false, true)?,
+                address,
+                abi_data.as_basic_value_enum(),
+                output_offset,
+                output_length,
+                extra_value_1,
+                extra_value_2,
+            )
+            .map(Some);
+        }
+        Some(compiler_common::ADDRESS_SYSTEM_CALL_BYREF) => {
+            let address = gas;
+            let abi_data = context.get_global(crate::r#const::GLOBAL_ACTIVE_POINTER)?;
+            let extra_value_1 = value.unwrap_or_else(|| context.field_const(0));
+            let extra_value_2 = input_length;
+
+            return simulation::system_call(
+                context,
+                context.runtime.modify(function, true, true)?,
                 address,
                 abi_data,
                 output_offset,
@@ -83,63 +178,62 @@ where
                 extra_value_2,
             )
             .map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_SET_CONTEXT_VALUE_CALL)
-            == simulation
-        {
+        }
+        Some(compiler_common::ADDRESS_SET_CONTEXT_VALUE_CALL) => {
             let value = value.unwrap_or_else(|| context.field_const(0));
 
             return simulation::set_context_value(context, value).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_SET_PUBDATA_PRICE)
-            == simulation
-        {
+        }
+        Some(compiler_common::ADDRESS_SET_PUBDATA_PRICE) => {
             let price = gas;
 
             return simulation::set_pubdata_price(context, price).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_INCREMENT_TX_COUNTER)
-            == simulation
-        {
-            return simulation::increment_tx_counter(context).map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_PTR_CALLDATA)
-            == simulation
-        {
-            return simulation::get_global(
-                context,
-                BigUint::from(crate::r#const::GLOBAL_INDEX_CALLDATA_ABI),
-            )
-            .map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_CALL_FLAGS)
-            == simulation
-        {
-            return simulation::get_global(
-                context,
-                BigUint::from(crate::r#const::GLOBAL_INDEX_CALL_FLAGS),
-            )
-            .map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_EXTRA_ABI_DATA_1)
-            == simulation
-        {
-            return simulation::get_global(
-                context,
-                BigUint::from(crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_1),
-            )
-            .map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_EXTRA_ABI_DATA_2)
-            == simulation
-        {
-            return simulation::get_global(
-                context,
-                BigUint::from(crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_2),
-            )
-            .map(Some);
-        } else if crate::evm::parse_address(compiler_common::ADDRESS_GET_GLOBAL_PTR_RETURN_DATA)
-            == simulation
-        {
-            return simulation::get_global(
-                context,
-                BigUint::from(crate::r#const::GLOBAL_INDEX_RETURN_DATA_ABI),
-            )
-            .map(Some);
         }
+        Some(compiler_common::ADDRESS_INCREMENT_TX_COUNTER) => {
+            return simulation::increment_tx_counter(context).map(Some);
+        }
+        Some(compiler_common::ADDRESS_GET_GLOBAL_PTR_CALLDATA) => {
+            return simulation::get_global(context, crate::r#const::GLOBAL_INDEX_CALLDATA_ABI)
+                .map(Some);
+        }
+        Some(compiler_common::ADDRESS_GET_GLOBAL_CALL_FLAGS) => {
+            return simulation::get_global(context, crate::r#const::GLOBAL_INDEX_CALL_FLAGS)
+                .map(Some);
+        }
+        Some(compiler_common::ADDRESS_GET_GLOBAL_EXTRA_ABI_DATA_1) => {
+            return simulation::get_global(context, crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_1)
+                .map(Some);
+        }
+        Some(compiler_common::ADDRESS_GET_GLOBAL_EXTRA_ABI_DATA_2) => {
+            return simulation::get_global(context, crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_2)
+                .map(Some);
+        }
+        Some(compiler_common::ADDRESS_GET_GLOBAL_PTR_RETURN_DATA) => {
+            return simulation::get_global(context, crate::r#const::GLOBAL_INDEX_RETURN_DATA_ABI)
+                .map(Some);
+        }
+        Some(compiler_common::ADDRESS_ACTIVE_PTR_LOAD_CALLDATA) => {
+            return simulation::calldata_ptr_to_active(context).map(Some);
+        }
+        Some(compiler_common::ADDRESS_ACTIVE_PTR_LOAD_RETURN_DATA) => {
+            return simulation::return_data_ptr_to_active(context).map(Some);
+        }
+        Some(compiler_common::ADDRESS_ACTIVE_PTR_ADD) => {
+            let offset = gas;
+
+            return simulation::active_ptr_add_assign(context, offset).map(Some);
+        }
+        Some(compiler_common::ADDRESS_ACTIVE_PTR_SHRINK) => {
+            let offset = gas;
+
+            return simulation::active_ptr_shrink_assign(context, offset).map(Some);
+        }
+        Some(compiler_common::ADDRESS_ACTIVE_PTR_PACK) => {
+            let data = gas;
+
+            return simulation::active_ptr_pack_assign(context, data).map(Some);
+        }
+        _ => {}
     }
 
     let identity_block = context.append_basic_block("contract_call_identity_block");
@@ -153,7 +247,7 @@ where
         address,
         ordinary_block,
         &[(
-            context.field_const_str(compiler_common::ADDRESS_IDENTITY),
+            context.field_const(compiler_common::ADDRESS_IDENTITY.into()),
             identity_block,
         )],
     );
@@ -349,11 +443,11 @@ where
         gas,
         AddressSpace::Heap,
         true,
-    )?
-    .into_int_value();
+    )?;
     let result = call_system(
         context,
-        context.field_const_str_hex(compiler_common::ADDRESS_MSG_VALUE),
+        context.runtime.modify(function, false, true)?,
+        context.field_const(compiler_common::ADDRESS_MSG_VALUE.into()),
         abi_data,
         output_offset,
         output_length,
@@ -536,7 +630,8 @@ fn call_mimic<'ctx, D>(
     function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
     mimic: inkwell::values::IntValue<'ctx>,
-    abi_data: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::BasicValueEnum<'ctx>,
+    extra_abi_data: [inkwell::values::IntValue<'ctx>; crate::r#const::EXTRA_ABI_DATA_SIZE],
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
 where
     D: Dependency,
@@ -549,16 +644,18 @@ where
     );
     context.build_store(status_code_result_pointer, context.field_const(0));
 
+    let mut far_call_arguments = vec![
+        abi_data.as_basic_value_enum(),
+        address.as_basic_value_enum(),
+    ];
+    far_call_arguments.extend(
+        extra_abi_data
+            .into_iter()
+            .map(|value| value.as_basic_value_enum()),
+    );
+    far_call_arguments.push(mimic.as_basic_value_enum());
     let far_call_result_pointer = context
-        .build_invoke_far_call(
-            function,
-            vec![
-                abi_data.as_basic_value_enum(),
-                address.as_basic_value_enum(),
-                mimic.as_basic_value_enum(),
-            ],
-            "mimic_call_external",
-        )
+        .build_invoke_far_call(function, far_call_arguments, "mimic_call_external")
         .expect("IntrinsicFunction always returns a flag");
 
     let result_abi_data_pointer = unsafe {
@@ -618,7 +715,7 @@ fn call_far_raw<'ctx, D>(
     context: &mut Context<'ctx, D>,
     function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
-    abi_data: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::BasicValueEnum<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
 ) -> anyhow::Result<inkwell::values::BasicValueEnum<'ctx>>
@@ -636,10 +733,7 @@ where
     let far_call_result_pointer = context
         .build_invoke_far_call(
             function,
-            vec![
-                abi_data.as_basic_value_enum(),
-                address.as_basic_value_enum(),
-            ],
+            vec![abi_data, address.as_basic_value_enum()],
             "system_far_call_external",
         )
         .expect("IntrinsicFunction always returns a flag");
@@ -720,8 +814,9 @@ where
 #[allow(clippy::too_many_arguments)]
 fn call_system<'ctx, D>(
     context: &mut Context<'ctx, D>,
+    function: inkwell::values::FunctionValue<'ctx>,
     address: inkwell::values::IntValue<'ctx>,
-    abi_data: inkwell::values::IntValue<'ctx>,
+    abi_data: inkwell::values::BasicValueEnum<'ctx>,
     output_offset: inkwell::values::IntValue<'ctx>,
     output_length: inkwell::values::IntValue<'ctx>,
     extra_value_1: inkwell::values::IntValue<'ctx>,
@@ -740,9 +835,9 @@ where
 
     let far_call_result_pointer = context
         .build_invoke_far_call(
-            context.runtime.system_call,
+            function,
             vec![
-                abi_data.as_basic_value_enum(),
+                abi_data,
                 address.as_basic_value_enum(),
                 extra_value_1.as_basic_value_enum(),
                 extra_value_2.as_basic_value_enum(),

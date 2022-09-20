@@ -17,7 +17,7 @@ pub fn load<'ctx, D>(
 where
     D: Dependency,
 {
-    let calldata_pointer = context.get_global(crate::r#const::GLOBAL_CALLDATA_ABI)?;
+    let calldata_pointer = context.get_global(crate::r#const::GLOBAL_CALLDATA_POINTER)?;
     let calldata_pointer = unsafe {
         context.builder().build_gep(
             calldata_pointer.into_pointer_value(),
@@ -68,7 +68,7 @@ where
     );
 
     let calldata_pointer = context
-        .get_global(crate::r#const::GLOBAL_CALLDATA_ABI)?
+        .get_global(crate::r#const::GLOBAL_CALLDATA_POINTER)?
         .into_pointer_value();
     let calldata_pointer = unsafe {
         context.builder().build_gep(

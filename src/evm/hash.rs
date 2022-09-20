@@ -32,7 +32,7 @@ where
         AddressSpace::Heap,
         true,
     )?;
-    let address = context.field_const_str(compiler_common::ADDRESS_KECCAK256);
+    let address = context.field_const(compiler_common::ADDRESS_KECCAK256.into());
 
     let result_pointer = context
         .build_invoke_far_call(
