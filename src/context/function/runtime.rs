@@ -8,7 +8,8 @@ use crate::context::address_space::AddressSpace;
 use crate::context::attribute::Attribute;
 
 ///
-/// The LLVM runtime functions.
+/// The LLVM runtime functions, implemented in the LLVM back-end.
+/// The functions are automatically linked to the LLVM implementations if the signatures match.
 ///
 #[derive(Debug)]
 pub struct Runtime<'ctx> {
@@ -193,7 +194,7 @@ impl<'ctx> Runtime<'ctx> {
                 ),
             Some(inkwell::module::Linkage::External),
         );
-        Self::apply_default_math(llvm, add_mod);
+        Self::apply_default_attributes(llvm, add_mod);
         let mul_mod = module.add_function(
             Self::FUNCTION_MULMOD,
             llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
@@ -209,7 +210,7 @@ impl<'ctx> Runtime<'ctx> {
                 ),
             Some(inkwell::module::Linkage::External),
         );
-        Self::apply_default_math(llvm, mul_mod);
+        Self::apply_default_attributes(llvm, mul_mod);
         let sign_extend = module.add_function(
             Self::FUNCTION_SIGNEXTEND,
             llvm.custom_width_int_type(compiler_common::BITLENGTH_FIELD as u32)
@@ -225,7 +226,7 @@ impl<'ctx> Runtime<'ctx> {
                 ),
             Some(inkwell::module::Linkage::External),
         );
-        Self::apply_default_math(llvm, sign_extend);
+        Self::apply_default_attributes(llvm, sign_extend);
 
         let storage_load = module.add_function(
             Self::FUNCTION_SLOAD,
@@ -683,7 +684,7 @@ impl<'ctx> Runtime<'ctx> {
     ///
     /// Applies the default attribute set for the math function.
     ///
-    fn apply_default_math(
+    fn apply_default_attributes(
         llvm: &'ctx inkwell::context::Context,
         function: inkwell::values::FunctionValue<'ctx>,
     ) {

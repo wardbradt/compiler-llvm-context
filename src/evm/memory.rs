@@ -7,7 +7,9 @@ use crate::context::Context;
 use crate::Dependency;
 
 ///
-/// Translates the heap memory load.
+/// Translates the `mload` instruction.
+///
+/// Uses the main heap.
 ///
 pub fn load<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -22,7 +24,9 @@ where
 }
 
 ///
-/// Translates the heap memory store.
+/// Translates the `mstore` instruction.
+///
+/// Uses the main heap.
 ///
 pub fn store<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -39,7 +43,9 @@ where
 }
 
 ///
-/// Translates the heap memory byte store.
+/// Translates the `mstore8` instruction.
+///
+/// Uses the main heap.
 ///
 pub fn store_byte<'ctx, D>(
     context: &mut Context<'ctx, D>,

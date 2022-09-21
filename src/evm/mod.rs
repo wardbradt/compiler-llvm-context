@@ -1,5 +1,5 @@
 //!
-//! The common code generation utils.
+//! The EVM instructions translation utils.
 //!
 
 pub mod arithmetic;

@@ -11,6 +11,9 @@ use crate::Dependency;
 ///
 /// Translates the contract immutable load.
 ///
+/// In the deploy code the values are read from the auxiliary heap.
+/// In the runtime code they are requested from the system contract.
+///
 pub fn load<'ctx, D>(
     context: &mut Context<'ctx, D>,
     index: inkwell::values::IntValue<'ctx>,
@@ -63,6 +66,11 @@ where
 
 ///
 /// Translates the contract immutable store.
+///
+/// In the deploy code the values are written to the auxiliary heap at the predefined offset,
+/// being prepared for returning to the system contract for saving.
+///
+/// Ignored in the runtime code.
 ///
 pub fn store<'ctx, D>(
     context: &mut Context<'ctx, D>,

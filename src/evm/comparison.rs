@@ -10,6 +10,8 @@ use crate::Dependency;
 ///
 /// Translates the comparison operations.
 ///
+/// There is not difference between the EVM and LLVM IR behaviors.
+///
 pub fn compare<'ctx, D>(
     context: &mut Context<'ctx, D>,
     operand_1: inkwell::values::IntValue<'ctx>,

@@ -54,7 +54,7 @@ impl Settings {
     }
 
     ///
-    /// Returns the settings for the optimal number of cycles.
+    /// Returns the settings for the optimal number of VM execution cycles.
     ///
     pub fn cycles() -> Self {
         Self::new(

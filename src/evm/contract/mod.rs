@@ -16,6 +16,9 @@ use crate::Dependency;
 ///
 /// Translates a contract call.
 ///
+/// If the `simulation_address` is specified, the call is substituted with another instruction
+/// according to the specification.
+///
 #[allow(clippy::too_many_arguments)]
 pub fn call<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -294,7 +297,7 @@ where
 }
 
 ///
-/// Translates a linker symbol.
+/// Translates the Yul `linkersymbol` instruction.
 ///
 pub fn linker_symbol<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -403,7 +406,8 @@ where
 }
 
 ///
-/// The default call wrapper, which makes the necessary ABI tweaks if `msg.value` is not zero.
+/// The default call wrapper, which redirects the call to the `msg.value` simulator if `msg.value`
+/// is not zero.
 ///
 #[allow(clippy::too_many_arguments)]
 fn call_default_wrapped<'ctx, D>(
@@ -477,7 +481,7 @@ where
 }
 
 ///
-/// Generates a default contract call.
+/// Generates a default contract call, if the `msg.value` is zero.
 ///
 #[allow(clippy::too_many_arguments)]
 fn call_default<'ctx, D>(
@@ -593,7 +597,7 @@ where
 }
 
 ///
-/// Generates a memcopy call for the `Identity` precompile.
+/// Generates a memory copy loop repeating the behavior of the EVM `Identity` precompile.
 ///
 fn call_identity<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -624,6 +628,10 @@ where
 
 ///
 /// Generates a mimic call.
+///
+/// The mimic call is a special type of call that can only be used in the system contracts of
+/// zkSync. The call allows to call a contract with custom `msg.sender`, allowing to insert
+/// system contracts as middlewares.
 ///
 fn call_mimic<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -709,6 +717,9 @@ where
 
 ///
 /// Generates a raw far call.
+///
+/// The raw calls are made with call simulating instructions, where you can pass additional ABI data
+/// encoded as an argument.
 ///
 #[allow(clippy::too_many_arguments)]
 fn call_far_raw<'ctx, D>(
@@ -810,6 +821,10 @@ where
 
 ///
 /// Generates a system call.
+///
+/// The system calls are made with call simulating instructions. Such calls can accept two extra
+/// ABI arguments passed via the virtual machine registers. It is used, for example, to pass the
+/// callee address and the Ether value to the `msg.value` simulator.
 ///
 #[allow(clippy::too_many_arguments)]
 fn call_system<'ctx, D>(

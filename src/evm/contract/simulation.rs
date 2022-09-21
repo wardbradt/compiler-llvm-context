@@ -1,6 +1,11 @@
 //!
 //! Translates simulations of the Yul's external call instructions.
 //!
+//! Since we do not have our own Yul extension yet, we must provide a way of implementing additional
+//! instructions in zkSync. For this we use a substitutable call-like instructions with an enum
+//! value in the address. The constant value is caught by the Yul semantic analyzer and translated
+//! to a different instruction.
+//!
 
 use inkwell::values::BasicValue;
 
@@ -377,7 +382,16 @@ pub fn active_ptr_shrink_assign<'ctx, D>(
 where
     D: Dependency,
 {
-    todo!();
+    let active_pointer = context.get_global(crate::r#const::GLOBAL_ACTIVE_POINTER)?;
+    let active_pointer_shrank = context
+        .build_call(
+            context.get_intrinsic_function(IntrinsicFunction::PointerShrink),
+            &[active_pointer, offset.as_basic_value_enum()],
+            "active_pointer_shrank",
+        )
+        .expect("Always returns a pointer");
+    context.set_global(crate::r#const::GLOBAL_ACTIVE_POINTER, active_pointer_shrank);
+    Ok(context.field_const(1).as_basic_value_enum())
 }
 
 ///

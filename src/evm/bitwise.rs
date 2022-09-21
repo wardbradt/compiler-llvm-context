@@ -67,6 +67,9 @@ where
 ///
 /// Translates the bitwise shift left.
 ///
+/// Shifting by a word size or more is an UB in LLVM, so we must always check if the offset is
+/// between 0 and the word size (256 bits) and return 0 if so.
+///
 pub fn shift_left<'ctx, D>(
     context: &mut Context<'ctx, D>,
     operand_1: inkwell::values::IntValue<'ctx>,
@@ -107,6 +110,9 @@ where
 
 ///
 /// Translates the bitwise shift right.
+///
+/// Shifting by a word size or more is an UB in LLVM, so we must always check if the offset is
+/// between 0 and the word size (256 bits) and return 0 if so.
 ///
 pub fn shift_right<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -150,6 +156,9 @@ where
 
 ///
 /// Translates the arithmetic bitwise shift right.
+///
+/// Shifting by a word size or more is an UB in LLVM, so we must always check if the offset is
+/// between 0 and the word size (256 bits) and return 0 or -1 if so.
 ///
 pub fn shift_right_arithmetic<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -221,7 +230,7 @@ where
 }
 
 ///
-/// Translates the byte extraction.
+/// Translates the `byte` instruction.
 ///
 pub fn byte<'ctx, D>(
     context: &mut Context<'ctx, D>,

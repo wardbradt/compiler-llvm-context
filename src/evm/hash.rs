@@ -10,7 +10,7 @@ use crate::context::Context;
 use crate::Dependency;
 
 ///
-/// Translates the hash instruction.
+/// Translates the `keccak256` instruction.
 ///
 pub fn keccak256<'ctx, D>(
     context: &mut Context<'ctx, D>,

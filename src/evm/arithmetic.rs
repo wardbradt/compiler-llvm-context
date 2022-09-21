@@ -10,6 +10,8 @@ use crate::Dependency;
 ///
 /// Translates the arithmetic addition.
 ///
+/// There is not difference between the EVM and LLVM IR behaviors.
+///
 pub fn addition<'ctx, D>(
     context: &mut Context<'ctx, D>,
     operand_1: inkwell::values::IntValue<'ctx>,
@@ -28,6 +30,8 @@ where
 
 ///
 /// Translates the arithmetic subtraction.
+///
+/// There is not difference between the EVM and LLVM IR behaviors.
 ///
 pub fn subtraction<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -48,6 +52,8 @@ where
 ///
 /// Translates the arithmetic multiplication.
 ///
+/// There is not difference between the EVM and LLVM IR behaviors.
+///
 pub fn multiplication<'ctx, D>(
     context: &mut Context<'ctx, D>,
     operand_1: inkwell::values::IntValue<'ctx>,
@@ -66,6 +72,9 @@ where
 
 ///
 /// Translates the arithmetic division.
+///
+/// The only difference between the EVM and LLVM IR is that 0 must be returned in case of
+/// division by zero.
 ///
 pub fn division<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -109,6 +118,9 @@ where
 ///
 /// Translates the arithmetic remainder.
 ///
+/// The only difference between the EVM and LLVM IR is that 0 must be returned in case of
+/// division by zero.
+///
 pub fn remainder<'ctx, D>(
     context: &mut Context<'ctx, D>,
     operand_1: inkwell::values::IntValue<'ctx>,
@@ -150,6 +162,10 @@ where
 
 ///
 /// Translates the signed arithmetic division.
+///
+/// Two differences between the EVM and LLVM IR:
+/// 1. In case of division by zero, 0 is returned.
+/// 2. In case of overflow, the first argument is returned.
 ///
 pub fn division_signed<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -220,6 +236,9 @@ where
 
 ///
 /// Translates the signed arithmetic remainder.
+///
+/// The only differences between the EVM and LLVM IR are that 0 must be returned in cases of
+/// division by zero or overflow.
 ///
 pub fn remainder_signed<'ctx, D>(
     context: &mut Context<'ctx, D>,

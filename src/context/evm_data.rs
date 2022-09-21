@@ -7,6 +7,8 @@ use crate::context::argument::Argument;
 ///
 /// The LLVM generator EVM data.
 ///
+/// Describes some data that is only relevant to the EVM legacy assembly.
+///
 #[derive(Debug, Clone)]
 pub struct EVMData<'ctx> {
     /// The Solidity compiler version.

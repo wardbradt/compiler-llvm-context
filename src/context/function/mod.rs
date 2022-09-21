@@ -21,21 +21,25 @@ use self::r#return::Return;
 ///
 #[derive(Debug, Clone)]
 pub struct Function<'ctx> {
-    /// The name.
+    /// The high-level source code name.
     pub name: String,
-    /// The LLVM value.
+    /// The LLVM function value.
     pub value: inkwell::values::FunctionValue<'ctx>,
 
-    /// The entry block.
+    /// The entry block. Each LLVM IR functions must have an entry block.
     pub entry_block: inkwell::basic_block::BasicBlock<'ctx>,
-    /// The return/leave block.
+    /// The return/leave block. LLVM IR functions may have multiple returning blocks, but it is
+    /// more reasonable to have a single returning block and other high-level language returns
+    /// jumping to it. This way it is easier to implement some additional checks and clean-ups
+    /// before the returning.
     pub return_block: inkwell::basic_block::BasicBlock<'ctx>,
 
     /// The return value entity.
     pub r#return: Option<Return<'ctx>>,
     /// The stack representation.
     pub stack: HashMap<String, inkwell::values::PointerValue<'ctx>>,
-    /// The saved constants. Used for peculiar cases like call simulation.
+    /// The constants saved to variables. Used for peculiar cases like call simulation.
+    /// It is a partial implementation of the constant propagation.
     pub constants: HashMap<String, num::BigUint>,
     /// The block-local variables. They are still allocated at the beginning of the function,
     /// but their parent block must be known in order to pass the implicit arguments thereto.

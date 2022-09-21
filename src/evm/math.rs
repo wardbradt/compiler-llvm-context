@@ -7,7 +7,9 @@ use crate::Dependency;
 use inkwell::values::BasicValue;
 
 ///
-/// Translates the modular addition operation.
+/// Translates the `addmod` instruction.
+///
+/// Implemented as a runtime function in the LLVM back-end.
 ///
 pub fn add_mod<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -30,7 +32,9 @@ where
 }
 
 ///
-/// Translates the modular multiplication operation.
+/// Translates the `mulmod` instruction.
+///
+/// Implemented as a runtime function in the LLVM back-end.
 ///
 pub fn mul_mod<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -53,7 +57,9 @@ where
 }
 
 ///
-/// Translates the exponent operation.
+/// Translates the `exp` instruction.
+///
+/// Implemented as the binary exponentiation algorithm.
 ///
 pub fn exponent<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -143,7 +149,9 @@ where
 }
 
 ///
-/// Translates the sign extension operation.
+/// Translates the `signextend` instruction.
+///
+/// Implemented as a runtime function in the LLVM back-end.
 ///
 pub fn sign_extend<'ctx, D>(
     context: &mut Context<'ctx, D>,

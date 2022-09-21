@@ -9,7 +9,9 @@ use crate::context::Context;
 use crate::Dependency;
 
 ///
-/// The LLVM intrinsic function.
+/// The LLVM intrinsic function, implemented in the LLVM back-end.
+///
+/// Most of the intrinsics are translated directly into bytecode instructions.
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Intrinsic {
@@ -39,6 +41,8 @@ pub enum Intrinsic {
     SetPubdataPrice,
     /// The transaction counter incrementor.
     IncrementTxCounter,
+    /// The pointer shrink.
+    PointerShrink,
     /// The pointer pack.
     PointerPack,
 
@@ -72,6 +76,7 @@ impl Intrinsic {
             Intrinsic::SetU128 => "llvm.syncvm.setu128",
             Intrinsic::SetPubdataPrice => "llvm.syncvm.setpubdataprice",
             Intrinsic::IncrementTxCounter => "llvm.syncvm.inctx",
+            Intrinsic::PointerShrink => "llvm.syncvm.ptr.shrink",
             Intrinsic::PointerPack => "llvm.syncvm.ptr.pack",
 
             Intrinsic::Return => "llvm.syncvm.return",

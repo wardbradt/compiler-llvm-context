@@ -12,6 +12,10 @@ use crate::Dependency;
 ///
 /// Translates a log or event call.
 ///
+/// There are several cases of the translation for the sake of efficiency, since the front-end
+/// emits topics and values sequentially by one, but the LLVM intrinsic and bytecode instruction
+/// accept two at once.
+///
 pub fn log<'ctx, D>(
     context: &mut Context<'ctx, D>,
     range_start: inkwell::values::IntValue<'ctx>,

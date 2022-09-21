@@ -12,6 +12,8 @@ use crate::Dependency;
 ///
 /// Translates the `throw` instruction.
 ///
+/// This instruction is a zkSync Yul extension. It allows to throw exceptions in the Yul mode.
+///
 pub fn throw<'ctx, D>(
     context: &mut Context<'ctx, D>,
 ) -> anyhow::Result<Option<inkwell::values::BasicValueEnum<'ctx>>>

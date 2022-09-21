@@ -17,7 +17,7 @@ pub struct Build {
     pub bytecode: Vec<u8>,
     /// The zkEVM bytecode hash.
     pub hash: String,
-    /// The factory dependencies.
+    /// The hash-to-path mapping of the contract factory dependencies.
     pub factory_dependencies: BTreeMap<String, String>,
 }
 

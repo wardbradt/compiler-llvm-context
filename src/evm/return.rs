@@ -9,7 +9,9 @@ use crate::context::Context;
 use crate::Dependency;
 
 ///
-/// Translates the normal return.
+/// Translates the `return` instruction.
+///
+/// Unlike in EVM, zkSync constructors return the array of contract immutables.
 ///
 pub fn r#return<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -70,7 +72,7 @@ where
 }
 
 ///
-/// Translates the revert.
+/// Translates the `revert` instruction.
 ///
 pub fn revert<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -85,7 +87,9 @@ where
 }
 
 ///
-/// Translates the stop.
+/// Translates the `stop` instruction.
+///
+/// Is the same as `return(0, 0)`.
 ///
 pub fn stop<'ctx, D>(
     context: &mut Context<'ctx, D>,
@@ -97,7 +101,9 @@ where
 }
 
 ///
-/// Translates the invalid.
+/// Translates the `invalid` instruction.
+///
+/// Is the same as `revert(0, 0)`.
 ///
 pub fn invalid<'ctx, D>(
     context: &mut Context<'ctx, D>,

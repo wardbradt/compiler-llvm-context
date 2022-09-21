@@ -10,6 +10,8 @@ use crate::context::function::block::Block;
 ///
 /// The LLVM generator function EVM data.
 ///
+/// Describes some data that is only relevant to the EVM legacy assembly.
+///
 #[derive(Debug, Clone)]
 pub struct EVMData<'ctx> {
     /// The ordinary blocks with numeric tags.

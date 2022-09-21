@@ -14,7 +14,6 @@ use crate::Dependency;
 /// - selector (4 bytes)
 /// - salt (32 bytes)
 /// - bytecode hash (32 bytes)
-/// - ether value (32 bytes)
 /// - constructor arguments offset (32 bytes)
 /// - constructor arguments length (32 bytes)
 ///
@@ -106,12 +105,12 @@ where
 /// - the deployer contract method signature
 /// - the salt if the call is `create2`, or zero if the call is `create1`
 /// - the hash of the bytecode of the contract whose instance is being created
-/// - the passed Ether value
 /// - the offset of the constructor arguments
 /// - the length of the constructor arguments
 ///
 /// If the call is `create1`, the space for the salt is still allocated, because the memory for the
-/// header is allocated before it is known which version of `create` is going to be used.
+/// header is allocated by the Yul or EVM legacy assembly before it is known which version of
+/// `create` is going to be used.
 ///
 /// Concerning AST, it looks like `datasize` in Yul, and `PUSH #[$]` in the EVM legacy assembly.
 ///

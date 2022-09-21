@@ -40,6 +40,9 @@ use self::r#loop::Loop;
 ///
 /// The LLVM generator context.
 ///
+/// It is a not-so-big god-like object glueing all the compilers' complexity and act as an adapter
+/// and a superstructure over the inner `inkwell` LLVM context.
+///
 pub struct Context<'ctx, D>
 where
     D: Dependency,
@@ -48,7 +51,7 @@ where
     llvm: &'ctx inkwell::context::Context,
     /// The inner LLVM context builder.
     builder: inkwell::builder::Builder<'ctx>,
-    /// The optimizing tools.
+    /// The optimization tools.
     optimizer: Optimizer<'ctx>,
     /// The current module.
     module: inkwell::module::Module<'ctx>,
@@ -57,19 +60,22 @@ where
     /// The loop context stack.
     loop_stack: Vec<Loop<'ctx>>,
 
-    /// The runtime functions.
+    /// The runtime functions, implemented in the LLVM back-end.
+    /// The functions are automatically linked to the LLVM implementations if the signatures match.
     pub runtime: Runtime<'ctx>,
     /// The declared functions.
     pub functions: HashMap<String, Function<'ctx>>,
 
-    /// The current contract code type.
+    /// The current contract code type (deploy or runtime).
     code_type: Option<CodeType>,
-    /// The project dependency manager.
+    /// The project dependency manager. It can be any entity implementing the trait.
+    /// The manager is used to get information about contracts and their dependencies during
+    /// the multi-threaded compilation process.
     dependency_manager: Option<Arc<RwLock<D>>>,
-    /// Whether to dump the specified IRs.
+    /// The flags telling whether to dump the specified IRs.
     dump_flags: Vec<DumpFlag>,
 
-    /// The EVM compiler data.
+    /// The EVM legacy assembly data.
     evm_data: Option<EVMData<'ctx>>,
     /// The immutables size tracker. Stores the size in bytes.
     /// Does not take into account the size of the indexes.
@@ -125,7 +131,7 @@ where
     }
 
     ///
-    /// Initializes a new EVM LLVM context.
+    /// Initializes a new LLVM context with the EVM legacy assembly support.
     ///
     pub fn new_evm(
         llvm: &'ctx inkwell::context::Context,
@@ -141,7 +147,7 @@ where
     }
 
     ///
-    /// Builds the LLVM module, returning the build artifacts.
+    /// Builds the LLVM IR module, returning the build artifacts.
     ///
     pub fn build(self, contract_path: &str) -> anyhow::Result<Build> {
         if self.dump_flags.contains(&DumpFlag::LLVM) {
@@ -217,28 +223,28 @@ where
     }
 
     ///
-    /// Returns the current module reference.
+    /// Returns the current LLVM IR module reference.
     ///
     pub fn module(&self) -> &inkwell::module::Module<'ctx> {
         &self.module
     }
 
     ///
-    /// Returns the target machine reference.
+    /// Returns the LLVM target machine reference.
     ///
     pub fn target_machine(&self) -> &inkwell::targets::TargetMachine {
         self.optimizer.target_machine()
     }
 
     ///
-    /// Sets the current code type.
+    /// Sets the current code type (deploy or runtime).
     ///
     pub fn set_code_type(&mut self, code_type: CodeType) {
         self.code_type = Some(code_type);
     }
 
     ///
-    /// Returns the current code type.
+    /// Returns the current code type (deploy or runtime).
     ///
     pub fn code_type(&self) -> CodeType {
         self.code_type.expect("Always exists")
@@ -287,10 +293,7 @@ where
     }
 
     ///
-    /// Verifies the current module.
-    ///
-    /// # Panics
-    /// If verification fails.
+    /// Verifies the current LLVM IR module.
     ///
     pub fn verify(&self) -> anyhow::Result<()> {
         self.module()
@@ -316,7 +319,7 @@ where
     }
 
     ///
-    /// Gets a full contract_path.
+    /// Gets a full contract_path from the dependency manager.
     ///
     pub fn resolve_path(&self, identifier: &str) -> anyhow::Result<String> {
         self.dependency_manager
@@ -329,7 +332,7 @@ where
     }
 
     ///
-    /// Gets a deployed library address.
+    /// Gets a deployed library address from the dependency manager.
     ///
     pub fn resolve_library(&self, path: &str) -> anyhow::Result<inkwell::values::IntValue<'ctx>> {
         self.dependency_manager
@@ -345,6 +348,11 @@ where
 
     ///
     /// Appends a function to the current module.
+    ///
+    /// The attributes only affect the LLVM optimizations.
+    ///
+    /// TODO: look into the `alwaysinline` attributes once the inlining problems have been
+    /// investigated and resolved in the LLVM framework.
     ///
     pub fn add_function(
         &mut self,
@@ -441,9 +449,6 @@ where
     ///
     /// Sets the current function.
     ///
-    /// # Panics
-    /// If the function with `name` does not exist.
-    ///
     pub fn set_function(&mut self, function: Function<'ctx>) {
         self.function = Some(function);
     }
@@ -462,7 +467,7 @@ where
     }
 
     ///
-    /// Returns the specified intrinsic function.
+    /// Returns the specified LLVM intrinsic function.
     ///
     pub fn get_intrinsic_function(
         &self,
@@ -592,7 +597,7 @@ where
     ///
     /// Builds a stack store instruction.
     ///
-    /// Sets the alignment to 256 bits for stack and 1 bit for heap, parent, and child.
+    /// Sets the alignment to 256 bits for the stack and 1 bit for the heap, parent, and child.
     ///
     pub fn build_store<V: BasicValue<'ctx>>(
         &self,
@@ -617,7 +622,7 @@ where
     ///
     /// Builds a stack load instruction.
     ///
-    /// Sets the alignment to 256 bits for stack and 1 bit for heap, parent, and child.
+    /// Sets the alignment to 256 bits for the stack and 1 bit for the heap, parent, and child.
     ///
     pub fn build_load(
         &self,
@@ -786,7 +791,7 @@ where
     }
 
     ///
-    /// Builds a far call ABI invoke.
+    /// Builds an invoke of an external contract.
     ///
     pub fn build_invoke_far_call(
         &self,
@@ -810,7 +815,11 @@ where
     }
 
     ///
-    /// Builds a near call ABI invoke.
+    /// Builds an invoke of local call covered with an exception handler.
+    ///
+    /// Yul does not the exception handling, so the user can declare a special handling function
+    /// called (see constant `ZKSYNC_NEAR_CALL_ABI_EXCEPTION_HANDLER`. If the enclosed function
+    /// panics, the control flow will be transferred to the exception handler.
     ///
     pub fn build_invoke_near_call_abi(
         &self,
@@ -960,6 +969,11 @@ where
     ///
     /// Builds a long contract exit sequence.
     ///
+    /// The deploy code does not return the runtime code like in EVM. Instead, it returns some
+    /// additional contract metadata, e.g. the array of immutables.
+    /// The deploy code uses the auxiliary heap for the return, because otherwise it is not possible
+    /// to allocate memory together with the Yul allocator safely.
+    ///
     pub fn build_exit(
         &self,
         return_function: IntrinsicFunction,
@@ -1096,11 +1110,10 @@ where
     }
 
     ///
-    /// Returns an integer type constant.
+    /// Returns a boolean type constant.
     ///
     pub fn bool_const(&self, value: bool) -> inkwell::values::IntValue<'ctx> {
-        self.integer_type(compiler_common::BITLENGTH_BOOLEAN)
-            .const_int(if value { 1 } else { 0 }, false)
+        self.bool_type().const_int(if value { 1 } else { 0 }, false)
     }
 
     ///
@@ -1111,7 +1124,7 @@ where
     }
 
     ///
-    /// Returns a field type constant.
+    /// Returns a field (uint256) type constant.
     ///
     pub fn field_const(&self, value: u64) -> inkwell::values::IntValue<'ctx> {
         self.field_type().const_int(value, false)
@@ -1156,6 +1169,13 @@ where
     }
 
     ///
+    /// Returns the boolean type.
+    ///
+    pub fn bool_type(&self) -> inkwell::types::IntType<'ctx> {
+        self.llvm.bool_type()
+    }
+
+    ///
     /// Returns the integer type of the specified bitlength.
     ///
     pub fn integer_type(&self, bitlength: usize) -> inkwell::types::IntType<'ctx> {
@@ -1192,7 +1212,7 @@ where
     }
 
     ///
-    /// Returns the function type for the specified parameters.
+    /// Returns a Yul function type with the specified arguments and number of return values.
     ///
     pub fn function_type(
         &self,
@@ -1223,6 +1243,8 @@ where
 
     ///
     /// Modifies the call site value, setting the default attributes.
+    ///
+    /// The attributes only affect the LLVM optimizations.
     ///
     pub fn modify_call_site_value(
         &self,
@@ -1402,7 +1424,7 @@ where
     ///
     /// Gets the offset of the immutable value.
     ///
-    /// If the value is not yet allocated, it is forcibly allocated.
+    /// If the value is not yet allocated, then it is done forcibly.
     ///
     pub fn get_immutable(&mut self, identifier: &str) -> usize {
         match self.immutables.get(identifier).copied() {
