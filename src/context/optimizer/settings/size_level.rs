@@ -5,7 +5,7 @@
 ///
 /// The LLVM optimizer settings size level.
 ///
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SizeLevel {
     /// No size optimizations.
     Zero,

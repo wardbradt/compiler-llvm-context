@@ -5,7 +5,7 @@
 ///
 /// The LLVM attribute.
 ///
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Attribute {
     /// The eponymous LLVM attribute.
     AlwaysInline = 1,

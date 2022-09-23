@@ -288,8 +288,10 @@ where
         | index @ crate::r#const::GLOBAL_INDEX_EXTRA_ABI_DATA_2 => {
             let extra_abi_data_pointer =
                 context.get_global_ptr(crate::r#const::GLOBAL_EXTRA_ABI_DATA)?;
-            let extra_abi_data_index =
-                context.field_const((index - crate::r#const::EXTRA_ABI_DATA_SIZE) as u64);
+            let extra_abi_data_index = context.integer_const(
+                compiler_common::BITLENGTH_X32,
+                (index - crate::r#const::EXTRA_ABI_DATA_SIZE) as u64,
+            );
             let extra_abi_data_element_pointer = unsafe {
                 context.builder().build_gep(
                     extra_abi_data_pointer,
